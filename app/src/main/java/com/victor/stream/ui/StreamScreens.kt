@@ -44,8 +44,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.Animation
-import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Theaters
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -89,7 +88,6 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.victor.stream.ui.theme.AppTheme
-import com.victor.stream.ui.theme.AppThemes
 import com.victor.stream.core.DebugCaptureCard
 import com.victor.stream.data.GENRE_MAP
 import com.victor.stream.data.PrefsStore
@@ -587,17 +585,137 @@ fun GenreChipsRow(type: String, onPick: (String, String) -> Unit) {
     }
 }
 
-/** A swipeable, edge-to-edge carousel of featured titles at the top of Home. */
+/** Edge-to-edge featured hero. Phones swipe; TV pages with the remote. */
 @Composable
-fun HeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemModel) -> Unit) {
+fun HeroCarousel(
+    items: List<MediaItemModel>,
+    onPlay: (MediaItemModel) -> Unit,
+    focusMemory: TvFocusMemory? = null
+) {
     if (items.isEmpty()) return
+    if (rememberIsTv()) {
+        TvHeroPager(items = items, onPlay = onPlay, focusMemory = focusMemory)
+    } else {
+        PhoneHeroCarousel(items = items, onPlay = onPlay)
+    }
+}
+
+/**
+ * TV hero: one page at a time, LEFT/RIGHT on the Details button changes the
+ * featured title with a crossfade. The button itself never moves, so remote
+ * focus is stable and pages can never stop half-way.
+ */
+@Composable
+private fun TvHeroPager(
+    items: List<MediaItemModel>,
+    onPlay: (MediaItemModel) -> Unit,
+    focusMemory: TvFocusMemory?
+) {
+    val t = AppTheme.c
+    var idx by rememberSaveable { mutableIntStateOf(0) }
+    if (idx >= items.size) idx = 0
+    val current = items[idx]
+
+    Box(modifier = Modifier
+        .fillMaxWidth()
+        .height(340.dp)
+    ) {
+        // Backdrop + text crossfade together; the button below stays put.
+        Crossfade(targetState = idx, animationSpec = tween(420), label = "heroPage") { i ->
+            val media = items[i.coerceIn(0, items.size - 1)]
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = media.backdropUrl.ifBlank { media.posterUrl },
+                    contentDescription = media.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF181818))
+                )
+                HeroScrims()
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(start = 18.dp, top = 26.dp, end = 18.dp)
+                        .fillMaxWidth(0.72f)
+                        .height(140.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    HeroKicker(media)
+                    Text(
+                        text = media.title,
+                        color = Color.White,
+                        fontSize = 34.sp,
+                        lineHeight = 38.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    HeroMetaRow(media)
+                }
+            }
+        }
+
+        // Static Details button — LEFT/RIGHT flips the featured title.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(start = 18.dp, top = 186.dp)
+                .then(
+                    if (focusMemory != null) Modifier.tvRememberedFocus("hero", 0, true, focusMemory)
+                    else Modifier
+                )
+                .onPreviewKeyEvent { ev ->
+                    if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (ev.key) {
+                        Key.DirectionRight -> {
+                            idx = (idx + 1) % items.size
+                            true
+                        }
+                        Key.DirectionLeft -> {
+                            if (idx > 0) {
+                                idx -= 1
+                                true
+                            } else {
+                                false // at the first page, LEFT goes to the side rail
+                            }
+                        }
+                        else -> false
+                    }
+                }
+                .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
+                .clip(RoundedCornerShape(50))
+                .background(t.accentGradient)
+                .clickable {
+                    if (focusMemory != null) focusMemory.pendingKey = "hero"
+                    onPlay(current)
+                }
+                .padding(horizontal = 22.dp, vertical = 9.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = t.onAccent,
+                modifier = Modifier.size(18.dp)
+            )
+            Text("Details", color = t.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+
+        HeroDots(count = items.size, current = idx, modifier = Modifier.align(Alignment.BottomEnd))
+    }
+}
+
+/** Phone hero: swipeable pages with auto-advance. */
+@Composable
+private fun PhoneHeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemModel) -> Unit) {
     val listState = rememberLazyListState()
     val fling = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(lazyListState = listState)
-    val isTv = rememberIsTv()
 
-    // Auto-advance the carousel every few seconds (phones only — on TV it
-    // would fight with remote focus). Pauses while the user is swiping.
-    if (!isTv && items.size > 1) {
+    if (items.size > 1) {
         LaunchedEffect(items.size) {
             while (true) {
                 delay(7000)
@@ -610,86 +728,37 @@ fun HeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemModel) -> Unit) 
     }
 
     Box {
-        LazyRow(
-            state = listState,
-            flingBehavior = fling
-        ) {
+        LazyRow(state = listState, flingBehavior = fling) {
             items(items) { item ->
-                FeaturedHero(
-                    item = item,
-                    onPlay = onPlay,
-                    modifier = Modifier.fillParentMaxWidth()
-                )
+                HeroSlide(item = item, onPlay = onPlay, modifier = Modifier.fillParentMaxWidth())
             }
         }
-        // Animated page dots floating over the bottom-right of the hero
-        val current = listState.firstVisibleItemIndex
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 18.dp, bottom = 12.dp)
-        ) {
-            items.forEachIndexed { index, _ ->
-                val w by animateDpAsState(
-                    targetValue = if (index == current) 16.dp else 6.dp,
-                    animationSpec = tween(300),
-                    label = "dotW"
-                )
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 3.dp)
-                        .height(6.dp)
-                        .width(w)
-                        .clip(RoundedCornerShape(50))
-                        .background(if (index == current) AppTheme.c.accent else Color(0x66FFFFFF))
-                )
-            }
-        }
+        HeroDots(
+            count = items.size,
+            current = listState.firstVisibleItemIndex,
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
     }
 }
 
-/** Full-bleed hero with the info block at the top-left, TV-app style. */
+/** One full-width hero page (phone). */
 @Composable
-fun FeaturedHero(
+private fun HeroSlide(
     item: MediaItemModel,
     onPlay: (MediaItemModel) -> Unit,
-    modifier: Modifier = Modifier,
-    isFirstRow: Boolean = false,
-    focusMemory: TvFocusMemory? = null
+    modifier: Modifier = Modifier
 ) {
     val t = AppTheme.c
-    val heroImage = item.backdropUrl.ifBlank { item.posterUrl }
     Box(modifier = modifier.height(340.dp)) {
         AsyncImage(
-            model = heroImage,
+            model = item.backdropUrl.ifBlank { item.posterUrl },
             contentDescription = item.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF181818))
         )
-        // Darken the left side so the info block reads clearly...
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(t.background, t.background.copy(alpha = 0.55f), Color.Transparent),
-                        endX = 1100f
-                    )
-                )
-        )
-        // ...and melt the bottom into the page so the rows overlap naturally.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Transparent, t.background)
-                    )
-                )
-        )
+        HeroScrims()
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -697,25 +766,7 @@ fun FeaturedHero(
                 .padding(start = 18.dp, top = 26.dp, end = 18.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
-            // "SERIES" / "MOVIE" kicker with a small accent square
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(t.accentGradient)
-                )
-                Text(
-                    text = item.badgeLabel.uppercase(),
-                    color = Color(0xFFDADADA),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 4.sp
-                )
-            }
+            HeroKicker(item)
             Text(
                 text = item.title,
                 color = Color.White,
@@ -726,77 +777,130 @@ fun FeaturedHero(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(0.72f)
             )
+            HeroMetaRow(item)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(t.accentGradient)
+                    .clickable { onPlay(item) }
+                    .padding(horizontal = 22.dp, vertical = 9.dp)
             ) {
-                Text(
-                    text = "TMDB",
-                    color = Color.Black,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(Color(0xFFF5C518))
-                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = t.onAccent,
+                    modifier = Modifier.size(18.dp)
                 )
-                Text(
-                    text = String.format("%.1f", item.rating) + "/10",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = item.releaseYear.take(4),
-                    color = t.accent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Details", color = t.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 6.dp)
-            ) {
-                // Filled accent "Play" pill
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier
-                        .then(
-                            if (focusMemory != null) Modifier.tvRememberedFocus("hero#${item.id}", 0, isFirstRow, focusMemory)
-                            else Modifier
-                        )
-                        .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
-                        .clip(RoundedCornerShape(50))
-                        .background(t.accentGradient)
-                        .clickable {
-                            if (focusMemory != null) focusMemory.pendingKey = "hero#${item.id}"
-                            onPlay(item)
-                        }
-                        .padding(horizontal = 22.dp, vertical = 9.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = t.onAccent,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text("Play", color = t.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-                // White "Details" pill (like the reference's second button)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color(0xFFEDEDED))
-                        .clickable { onPlay(item) }
-                        .padding(horizontal = 20.dp, vertical = 9.dp)
-                ) {
-                    Text("Details", color = Color(0xFF111111), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
+        }
+    }
+}
+
+/** Left darkening + bottom fade shared by all hero variants. */
+@Composable
+private fun HeroScrims() {
+    val t = AppTheme.c
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(t.background, t.background.copy(alpha = 0.55f), Color.Transparent),
+                    endX = 1100f
+                )
+            )
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, Color.Transparent, t.background)
+                )
+            )
+    )
+}
+
+@Composable
+private fun HeroKicker(item: MediaItemModel) {
+    val t = AppTheme.c
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(t.accentGradient)
+        )
+        Text(
+            text = item.badgeLabel.uppercase(),
+            color = Color(0xFFDADADA),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 4.sp
+        )
+    }
+}
+
+@Composable
+private fun HeroMetaRow(item: MediaItemModel) {
+    val t = AppTheme.c
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "TMDB",
+            color = Color.Black,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier
+                .clip(RoundedCornerShape(3.dp))
+                .background(Color(0xFFF5C518))
+                .padding(horizontal = 5.dp, vertical = 1.dp)
+        )
+        Text(
+            text = String.format("%.1f", item.rating) + "/10",
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = item.releaseYear.take(4),
+            color = t.accent,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/** Animated page dots used by both hero variants. */
+@Composable
+private fun HeroDots(count: Int, current: Int, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.padding(end = 18.dp, bottom = 12.dp)
+    ) {
+        repeat(count) { index ->
+            val w by animateDpAsState(
+                targetValue = if (index == current) 16.dp else 6.dp,
+                animationSpec = tween(300),
+                label = "dotW"
+            )
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 3.dp)
+                    .height(6.dp)
+                    .width(w)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (index == current) AppTheme.c.accent else Color(0x66FFFFFF))
+            )
         }
     }
 }
@@ -966,10 +1070,17 @@ fun HomeScreenWithSidebar(
                                         .take(5)
                                     if (heroItems.isNotEmpty()) {
                                         item {
-                                            HeroCarousel(items = heroItems, onPlay = onMediaClick)
+                                            HeroCarousel(
+                                                items = heroItems,
+                                                onPlay = onMediaClick,
+                                                focusMemory = focusMemory
+                                            )
                                         }
                                     }
+                                    // On TV the hero's Details button is the first focus target,
+                                    // so the app opens with the hero fully visible.
                                     val homeFirst = when {
+                                        heroItems.isNotEmpty() -> "hero"
                                         continueList.isNotEmpty() -> "continue"
                                         watchLaterList.isNotEmpty() -> "watchLater"
                                         else -> "trending"
@@ -1278,7 +1389,7 @@ fun SideRail(
         RailItem(Icons.Outlined.Home, "Home", selectedSection == "Home") { onSelectSection("Home") }
         RailItem(Icons.Outlined.Movie, "Movies", selectedSection == "Movies") { onSelectSection("Movies") }
         RailItem(Icons.Outlined.Tv, "TV Series", selectedSection == "Series") { onSelectSection("Series") }
-        RailItem(Icons.Outlined.Animation, "Anime", selectedSection == "Anime") { onSelectSection("Anime") }
+        RailItem(Icons.Outlined.AutoAwesome, "Anime", selectedSection == "Anime") { onSelectSection("Anime") }
         RailItem(Icons.Outlined.BookmarkBorder, "Watch Later", selectedSection == "WatchLater") { onSelectSection("WatchLater") }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -2758,78 +2869,6 @@ fun SettingsIconTile(icon: androidx.compose.ui.graphics.vector.ImageVector, tint
     }
 }
 
-/** Theme picker — tap a swatch to restyle the whole app instantly. */
-@Composable
-fun AppearanceCard() {
-    val t = AppTheme.c
-    val context = LocalContext.current
-    Card(
-        colors = CardDefaults.cardColors(containerColor = t.surface),
-        shape = RoundedCornerShape(18.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, t.glassBorder, RoundedCornerShape(18.dp))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SettingsIconTile(Icons.Outlined.Palette)
-                Column {
-                    Text("Appearance", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text("Pick a theme — changes apply instantly", color = t.textFaint, fontSize = 12.sp)
-                }
-            }
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                items(AppThemes.all) { spec ->
-                    val selected = t.id == spec.id
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier
-                            .tvFocusHighlight(RoundedCornerShape(14.dp), focusedScale = 1.08f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable { AppTheme.select(context, spec) }
-                            .padding(6.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(spec.accentGradient)
-                                .border(
-                                    width = if (selected) 2.dp else 1.dp,
-                                    color = if (selected) Color.White else t.glassBorder,
-                                    shape = CircleShape
-                                )
-                        ) {
-                            if (selected) {
-                                Icon(
-                                    imageVector = Icons.Filled.Check,
-                                    contentDescription = "Selected",
-                                    tint = spec.onAccent,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = spec.label,
-                            color = if (selected) Color.White else t.textSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun SettingsScreen(
     onAccountChanged: () -> Unit,
@@ -2864,7 +2903,7 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text(text = "Settings", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                        Text(text = "Appearance, accounts & tools", color = t.textFaint, fontSize = 12.sp)
+                        Text(text = "Accounts & tools", color = t.textFaint, fontSize = 12.sp)
                     }
                     OutlinedButton(
                         onClick = onBack,
@@ -2876,8 +2915,6 @@ fun SettingsScreen(
                         Text("\u2190 Done", color = Color.White, fontSize = 13.sp)
                     }
                 }
-
-                AppearanceCard()
 
                 AccountsCard(onOpen = { accountPage = it })
 
