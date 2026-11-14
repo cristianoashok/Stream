@@ -38,14 +38,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Animation
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.Theaters
-import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -84,10 +77,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
-import com.victor.stream.ui.theme.AppTheme
-import com.victor.stream.ui.theme.AppThemes
 import com.victor.stream.core.DebugCaptureCard
 import com.victor.stream.data.GENRE_MAP
 import com.victor.stream.data.PrefsStore
@@ -123,7 +113,7 @@ fun ResolvingOverlay(
         contentAlignment = Alignment.Center
     ) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = AppTheme.c.surface),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(
@@ -131,7 +121,7 @@ fun ResolvingOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                CircularProgressIndicator(color = AppTheme.c.accent)
+                CircularProgressIndicator(color = Color(0xFFE50914))
                 Text(
                     text = statusText,
                     color = Color.White,
@@ -182,15 +172,12 @@ fun ContinueWatchingRow(
         ) {
             itemsIndexed(continueList) { index, entry ->
                 val itemKey = "$rowKey#${entry.media.id}"
-                val t = AppTheme.c
                 Column(
                     modifier = Modifier
-                        .width(124.dp)
+                        .width(115.dp)
                         .tvRememberedFocus(itemKey, index, isFirstRow, focusMemory)
-                        .tvFocusHighlight(RoundedCornerShape(16.dp))
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(t.surface)
-                        .border(1.dp, t.glassBorder, RoundedCornerShape(16.dp))
+                        .tvFocusHighlight(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .combinedClickable(
                             onClick = {
                                 focusMemory?.pendingKey = itemKey
@@ -199,15 +186,14 @@ fun ContinueWatchingRow(
                             onLongClick = { showPopupFor = entry }
                         )
                 ) {
-                    Box(modifier = Modifier.padding(5.dp)) {
+                    Box {
                         AsyncImage(
                             model = entry.media.posterUrl,
                             contentDescription = entry.media.title,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(158.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .height(165.dp)
                                 .background(Color.DarkGray)
                         )
                         if (entry.seasonNumber != null && entry.episodeNumber != null) {
@@ -219,8 +205,8 @@ fun ContinueWatchingRow(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
                                     .padding(5.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xB3000000))
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xCC000000))
                                     .padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
@@ -229,38 +215,34 @@ fun ContinueWatchingRow(
                                 progress = {
                                     (entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f)
                                 },
-                                color = t.accent,
-                                trackColor = Color(0x66000000),
+                                color = Color(0xFFE50914),
+                                trackColor = Color.DarkGray,
                                 modifier = Modifier
-                                    .padding(horizontal = 6.dp, vertical = 6.dp)
                                     .fillMaxWidth()
                                     .height(4.dp)
-                                    .clip(RoundedCornerShape(50))
                                     .align(Alignment.BottomCenter)
                             )
                         }
                     }
-                    Column(modifier = Modifier.padding(start = 9.dp, end = 9.dp, top = 2.dp, bottom = 8.dp)) {
+                    Text(
+                        text = entry.media.title,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp, bottom = 0.dp)
+                    )
+                    val minsLeft = if (entry.durationMs > 0L) {
+                        ((entry.durationMs - entry.positionMs).coerceAtLeast(0L) / 60000L).toInt()
+                    } else -1
+                    if (minsLeft >= 0) {
                         Text(
-                            text = entry.media.title,
-                            color = t.textPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = if (minsLeft == 0) "Almost done" else "$minsLeft min left",
+                            color = Color.Gray,
+                            fontSize = 10.sp,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)
                         )
-                        val minsLeft = if (entry.durationMs > 0L) {
-                            ((entry.durationMs - entry.positionMs).coerceAtLeast(0L) / 60000L).toInt()
-                        } else -1
-                        if (minsLeft >= 0) {
-                            Text(
-                                text = if (minsLeft == 0) "Almost done" else "$minsLeft min left",
-                                color = t.textFaint,
-                                fontSize = 10.sp,
-                                maxLines = 1,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
                     }
                 }
             }
@@ -278,7 +260,7 @@ fun ContinueWatchingRow(
                         showPopupFor?.let { onRemoveEntry(it.media.id) }
                         showPopupFor = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
                     modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp))
                 ) { Text("Remove", color = Color.White) }
             },
@@ -320,7 +302,7 @@ fun MediaCarouselRow(
                     isWatchLaterScreen = false,
                     onClick = { onMediaClick(item) },
                     onWatchLaterChanged = onWatchLaterChanged,
-                    modifier = Modifier.width(124.dp),
+                    modifier = Modifier.width(115.dp),
                     focusKey = "$title#${item.id}",
                     focusIndex = index,
                     isFirstRow = isFirstRow,
@@ -350,17 +332,14 @@ fun PosterCard(
 
     // NOTE: no separate .focusable() here. combinedClickable is already focusable;
     // an extra focusable() created two focus stops, so OK had to be pressed twice.
-    val t = AppTheme.c
     Column(
         modifier = modifier
             .then(
                 if (focusKey != null) Modifier.tvRememberedFocus(focusKey, focusIndex, isFirstRow, focusMemory)
                 else Modifier
             )
-            .tvFocusHighlight(RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
-            .background(t.surface)
-            .border(1.dp, t.glassBorder, RoundedCornerShape(16.dp))
+            .tvFocusHighlight(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(8.dp))
             .combinedClickable(
                 onClick = {
                     if (focusKey != null) focusMemory?.pendingKey = focusKey
@@ -375,23 +354,21 @@ fun PosterCard(
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .padding(5.dp)
                     .fillMaxWidth()
-                    .height(158.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .height(165.dp)
                     .background(Color.DarkGray)
             )
             if (rankNumber != null) {
                 Text(
                     text = "#$rankNumber",
-                    color = t.onAccent,
+                    color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(10.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(t.accentGradient)
+                        .padding(5.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xFFE50914))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
@@ -402,46 +379,20 @@ fun PosterCard(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(10.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xB3000000))
+                    .padding(5.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xCC000000))
                     .padding(horizontal = 5.dp, vertical = 2.dp)
             )
         }
-        Column(modifier = Modifier.padding(start = 9.dp, end = 9.dp, top = 2.dp, bottom = 8.dp)) {
-            Text(
-                text = item.title,
-                color = t.textPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                modifier = Modifier.padding(top = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = null,
-                    tint = t.accent,
-                    modifier = Modifier.size(11.dp)
-                )
-                Text(
-                    text = String.format("%.1f", item.rating),
-                    color = t.textSecondary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "•  ${item.releaseYear.take(4)}",
-                    color = t.textFaint,
-                    fontSize = 10.sp,
-                    maxLines = 1
-                )
-            }
-        }
+        Text(
+            text = item.title,
+            color = Color.White,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp, bottom = 2.dp)
+        )
     }
 
     if (showWatchLaterPopup) {
@@ -471,7 +422,7 @@ fun PosterCard(
                         showWatchLaterPopup = false
                         onWatchLaterChanged()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
                     modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp))
                 ) {
                     Text(if (isWatchLaterScreen) "Remove" else "Watch Later", color = Color.White)
@@ -570,12 +521,12 @@ private fun ShimmerRow(posterCount: Int = 6) {
             userScrollEnabled = false
         ) {
             items(posterCount) {
-                Column(modifier = Modifier.width(124.dp)) {
+                Column(modifier = Modifier.width(115.dp)) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(168.dp)
-                            .shimmer(RoundedCornerShape(16.dp))
+                            .height(165.dp)
+                            .shimmer(RoundedCornerShape(8.dp))
                     )
                     Box(
                         modifier = Modifier
@@ -601,9 +552,10 @@ fun HomeLoadingSkeleton() {
         // A big hero placeholder, then a couple of poster rows
         Box(
             modifier = Modifier
+                .padding(horizontal = 14.dp)
                 .fillMaxWidth()
-                .height(300.dp)
-                .shimmer(RoundedCornerShape(0.dp))
+                .height(180.dp)
+                .shimmer(RoundedCornerShape(14.dp))
         )
         ShimmerRow()
         ShimmerRow()
@@ -634,8 +586,8 @@ fun GenreChipsRow(type: String, onPick: (String, String) -> Unit) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.05f)
-                        .background(AppTheme.c.surfaceHigh)
-                        .border(1.dp, AppTheme.c.glassBorder, RoundedCornerShape(50))
+                        .background(Color(0xFF1E1E1E))
+                        .border(1.dp, Color(0xFF383838), RoundedCornerShape(50))
                         .clickable { onPick(type, g) }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
@@ -646,16 +598,18 @@ fun GenreChipsRow(type: String, onPick: (String, String) -> Unit) {
     }
 }
 
-/** A swipeable, edge-to-edge carousel of featured titles at the top of Home. */
+/** A swipeable carousel of featured titles at the top of Home. */
 @Composable
 fun HeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemModel) -> Unit) {
     if (items.isEmpty()) return
     val listState = rememberLazyListState()
     val fling = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(lazyListState = listState)
-    Box {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LazyRow(
             state = listState,
-            flingBehavior = fling
+            flingBehavior = fling,
+            contentPadding = PaddingValues(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items) { item ->
                 FeaturedHero(
@@ -665,30 +619,28 @@ fun HeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemModel) -> Unit) 
                 )
             }
         }
-        // Page dots, floating over the bottom-right corner of the hero
+        // Little page dots showing which featured title is in view
         val current = listState.firstVisibleItemIndex
         Row(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 14.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color(0x59000000))
-                .padding(horizontal = 8.dp, vertical = 5.dp)
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+            horizontalArrangement = Arrangement.Center
         ) {
             items.forEachIndexed { index, _ ->
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 3.dp)
-                        .size(if (index == current) 7.dp else 5.dp)
-                        .clip(CircleShape)
-                        .background(if (index == current) AppTheme.c.accent else Color(0x80FFFFFF))
+                        .size(if (index == current) 8.dp else 6.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (index == current) Color(0xFFE50914) else Color(0xFF555555))
                 )
             }
         }
     }
 }
 
-/** Full-bleed backdrop "hero" for a featured title — Netflix-TV style. */
+/** Big backdrop "hero" card for a featured title. */
 @Composable
 fun FeaturedHero(
     item: MediaItemModel,
@@ -697,9 +649,21 @@ fun FeaturedHero(
     isFirstRow: Boolean = false,
     focusMemory: TvFocusMemory? = null
 ) {
-    val t = AppTheme.c
     val heroImage = item.backdropUrl.ifBlank { item.posterUrl }
-    Box(modifier = modifier.height(300.dp)) {
+    Box(
+        modifier = modifier
+            .height(200.dp)
+            .then(
+                if (focusMemory != null) Modifier.tvRememberedFocus("hero#${item.id}", 0, isFirstRow, focusMemory)
+                else Modifier
+            )
+            .tvFocusHighlight(RoundedCornerShape(16.dp), focusedScale = 1.02f)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable {
+                if (focusMemory != null) focusMemory.pendingKey = "hero#${item.id}"
+                onPlay(item)
+            }
+    ) {
         AsyncImage(
             model = heroImage,
             contentDescription = item.title,
@@ -708,123 +672,60 @@ fun FeaturedHero(
                 .fillMaxSize()
                 .background(Color.DarkGray)
         )
-        // Fade the backdrop into the page background at the bottom...
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Transparent, t.background),
-                        startY = 0f
-                    )
-                )
-        )
-        // ...and darken the left edge so the text stays readable.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(t.background.copy(alpha = 0.88f), Color.Transparent),
-                        endX = 900f
+                        colors = listOf(Color(0x33000000), Color(0xEE0D0D0D)),
+                        startY = 60f
                     )
                 )
         )
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Meta line: type badge + rating + year in a small glass pill row
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = item.badgeLabel,
-                    color = t.onAccent,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(t.accentGradient)
-                        .padding(horizontal = 7.dp, vertical = 2.dp)
-                )
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = null,
-                    tint = t.accent,
-                    modifier = Modifier.size(13.dp)
-                )
-                Text(
-                    text = String.format("%.1f", item.rating) + "   •   " + item.releaseYear.take(4),
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = item.badgeLabel + "  •  ★ " + String.format("%.1f", item.rating),
+                color = Color(0xFFE50914),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
             Text(
                 text = item.title,
                 color = Color.White,
-                fontSize = 30.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(0.8f)
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = item.overview,
-                color = Color(0xFFD4D4D8),
+                color = Color.LightGray,
                 fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(0.72f)
+                modifier = Modifier.fillMaxWidth(0.9f)
             )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 5.dp)
+                modifier = Modifier.padding(top = 4.dp)
             ) {
-                // Filled "Play" pill
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                Icon(
+                    imageVector = Icons.Outlined.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
                     modifier = Modifier
-                        .then(
-                            if (focusMemory != null) Modifier.tvRememberedFocus("hero#${item.id}", 0, isFirstRow, focusMemory)
-                            else Modifier
-                        )
-                        .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
+                        .size(26.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(t.accentGradient)
-                        .clickable {
-                            if (focusMemory != null) focusMemory.pendingKey = "hero#${item.id}"
-                            onPlay(item)
-                        }
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = t.onAccent,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text("Play", color = t.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-                // Glass "Details" pill
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
-                        .clip(RoundedCornerShape(50))
-                        .background(t.glass)
-                        .border(1.dp, t.glassBorder, RoundedCornerShape(50))
-                        .clickable { onPlay(item) }
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
-                ) {
-                    Text("Details", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                }
+                        .background(Color(0xFFE50914))
+                        .padding(3.dp)
+                )
+                Text("View details", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -859,19 +760,39 @@ fun HomeScreenWithSidebar(
     onOpenGenre: (String, String) -> Unit = { _, _ -> },
     focusMemory: TvFocusMemory = remember { TvFocusMemory() }
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
     val isTv = rememberIsTv()
-    val t = AppTheme.c
 
-    var continueList by remember { mutableStateOf(ServiceLocator.prefsStore.getContinueWatching()) }
-    var watchLaterList by remember { mutableStateOf(ServiceLocator.prefsStore.getWatchLater()) }
-    var tmdbAuth by remember { mutableStateOf(ServiceLocator.prefsStore.getTmdbAuth()) }
-    var aniAuth by remember { mutableStateOf(ServiceLocator.prefsStore.getAniListAuth()) }
+    // Drawer (sidebar) focus handling for the TV remote
+    val drawerItemCount = 7 // search + 5 sections + settings
+    val drawerFocusRequesters = remember { List(drawerItemCount) { FocusRequester() } }
+    var focusedDrawerIndex by remember { mutableIntStateOf(-1) }
+    var suppressAutoOpenUntil by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(selectedSection) {
-        continueList = ServiceLocator.prefsStore.getContinueWatching()
-        watchLaterList = ServiceLocator.prefsStore.getWatchLater()
-        tmdbAuth = ServiceLocator.prefsStore.getTmdbAuth()
-        aniAuth = ServiceLocator.prefsStore.getAniListAuth()
+    // Every time this screen appears (first launch, or returning from a movie/details), focus
+    // bounces briefly onto the ☰ button before the remembered poster grabs it. Suppress the
+    // auto-open during that settling window so leaving a poster never pops the sidebar.
+    LaunchedEffect(Unit) {
+        suppressAutoOpenUntil = System.currentTimeMillis() + 1600L
+    }
+
+    fun closeDrawerAndRestoreFocus(newSection: Boolean) {
+        // Don't let the ☰ button re-open the drawer while focus is travelling back
+        suppressAutoOpenUntil = System.currentTimeMillis() + 900L
+        focusMemory.pendingKey = if (newSection) {
+            TvFocusMemory.FIRST_ITEM
+        } else {
+            focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
+        }
+        scope.launch { drawerState.close() }
+    }
+
+    fun openDrawerFromRemote() {
+        if (drawerState.isOpen || drawerState.isAnimationRunning) return
+        scope.launch { drawerState.open() }
     }
 
     // If the remembered poster isn't on screen any more, fall back to the first poster
@@ -883,47 +804,269 @@ fun HomeScreenWithSidebar(
         }
     }
 
-    // Always-visible glossy icon rail on the left + content filling the rest.
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(t.background)
-    ) {
-        SideRail(
-            selectedSection = selectedSection,
-            onSelectSection = { key ->
-                if (key != selectedSection) focusMemory.pendingKey = TvFocusMemory.FIRST_ITEM
-                onSelectSection(key)
-            },
-            onOpenSearch = {
-                focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
-                onOpenSearchScreen()
-            },
-            onOpenSettings = {
-                focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
-                onOpenSettingsScreen()
+    // When the drawer opens, put focus on the currently selected section
+    LaunchedEffect(drawerState.targetValue) {
+        if (drawerState.targetValue == DrawerValue.Open) {
+            val idx = when (selectedSection) {
+                "Movies" -> 2
+                "Series" -> 3
+                "Anime" -> 4
+                "WatchLater" -> 5
+                else -> 1
             }
-        )
-        Box(
+            delay(120)
+            runCatching { drawerFocusRequesters[idx].requestFocus() }
+        }
+    }
+
+    var continueList by remember { mutableStateOf(ServiceLocator.prefsStore.getContinueWatching()) }
+    var watchLaterList by remember { mutableStateOf(ServiceLocator.prefsStore.getWatchLater()) }
+    var tmdbAuth by remember { mutableStateOf(ServiceLocator.prefsStore.getTmdbAuth()) }
+    var aniAuth by remember { mutableStateOf(ServiceLocator.prefsStore.getAniListAuth()) }
+
+    LaunchedEffect(selectedSection, drawerState.isOpen) {
+        continueList = ServiceLocator.prefsStore.getContinueWatching()
+        watchLaterList = ServiceLocator.prefsStore.getWatchLater()
+        tmdbAuth = ServiceLocator.prefsStore.getTmdbAuth()
+        aniAuth = ServiceLocator.prefsStore.getAniListAuth()
+    }
+
+    BackHandler(enabled = drawerState.isOpen) {
+        closeDrawerAndRestoreFocus(newSection = false)
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        scrimColor = Color(0x99000000),
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = Color(0xFF161616),
+                modifier = Modifier.width(265.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .padding(18.dp)
+                        .onPreviewKeyEvent { ev ->
+                            if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (ev.key) {
+                                // Right arrow closes the sidebar and goes back to the posters
+                                Key.DirectionRight -> {
+                                    closeDrawerAndRestoreFocus(newSection = false)
+                                    true
+                                }
+                                // Keep focus inside the sidebar at the top / bottom edges
+                                Key.DirectionUp -> focusedDrawerIndex == 0
+                                Key.DirectionDown -> focusedDrawerIndex == drawerItemCount - 1
+                                Key.DirectionLeft -> true
+                                else -> false
+                            }
+                        },
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Stream",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+
+                    Surface(
+                        onClick = {
+                            focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
+                            scope.launch {
+                                drawerState.close()
+                                onOpenSearchScreen()
+                            }
+                        },
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xFF242424),
+                        border = BorderStroke(1.dp, Color(0xFF383838)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .focusRequester(drawerFocusRequesters[0])
+                            .onFocusChanged { if (it.hasFocus) focusedDrawerIndex = 0 }
+                            .tvFocusHighlight(RoundedCornerShape(24.dp), focusedScale = 1.03f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = null,
+                                tint = Color(0xFF9E9E9E),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Search",
+                                color = Color(0xFF9E9E9E),
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = Color(0xFF2C2C2C), modifier = Modifier.padding(vertical = 4.dp))
+
+                    val sections = listOf(
+                        Triple("Home", "Home", Icons.Outlined.Home),
+                        Triple("Movies", "Movies", Icons.Outlined.Movie),
+                        Triple("Series", "TV Series", Icons.Outlined.Tv),
+                        Triple("Anime", "Anime", Icons.Outlined.Animation),
+                        Triple("WatchLater", "Watch Later (${watchLaterList.size})", Icons.Outlined.BookmarkBorder)
+                    )
+                    sections.forEachIndexed { sectionIdx, (key, label, icon) ->
+                        val drawerIdx = sectionIdx + 1
+                        NavigationDrawerItem(
+                            icon = {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            label = { Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium) },
+                            selected = selectedSection == key,
+                            onClick = {
+                                val changed = selectedSection != key
+                                onSelectSection(key)
+                                closeDrawerAndRestoreFocus(newSection = changed)
+                            },
+                            modifier = Modifier
+                                .focusRequester(drawerFocusRequesters[drawerIdx])
+                                .onFocusChanged { if (it.hasFocus) focusedDrawerIndex = drawerIdx }
+                                .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.03f),
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = Color(0xFFE50914),
+                                unselectedContainerColor = Color.Transparent,
+                                selectedTextColor = Color.White,
+                                unselectedTextColor = Color.LightGray
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = Color(0xFF2C2C2C), modifier = Modifier.padding(vertical = 4.dp))
+
+                    NavigationDrawerItem(
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        label = {
+                            Text("Settings and Account", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        },
+                        selected = false,
+                        onClick = {
+                            focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
+                            scope.launch {
+                                drawerState.close()
+                                onOpenSettingsScreen()
+                            }
+                        },
+                        modifier = Modifier
+                            .focusRequester(drawerFocusRequesters[drawerItemCount - 1])
+                            .onFocusChanged { if (it.hasFocus) focusedDrawerIndex = drawerItemCount - 1 }
+                            .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.03f),
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color(0xFF242424),
+                            unselectedTextColor = Color.White
+                        )
+                    )
+                }
+            }
+        }
+    ) {
+        Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
+                .fillMaxSize()
+                .background(Color(0xFF121212))
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1A1A1A))
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        scope.launch {
+                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.12f)
+                        .onFocusChanged { state ->
+                            // TV: landing on ☰ with the remote opens the sidebar straight away.
+                            // BUT only when focus has actually settled here on purpose — if a
+                            // poster is still waiting to grab focus (pendingKey set), e.g. right
+                            // after pressing Back from a movie, the ☰ gets focus for a split
+                            // second first; don't auto-open then.
+                            if (isTv && state.isFocused &&
+                                focusMemory.pendingKey == null &&
+                                System.currentTimeMillis() > suppressAutoOpenUntil
+                            ) {
+                                openDrawerFromRemote()
+                            }
+                        }
+                        .size(36.dp)
+                ) {
+                    Text(text = "☰", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    text = when (selectedSection) {
+                        "Movies" -> "Movies"
+                        "Series" -> "TV Series"
+                        "Anime" -> "Anime"
+                        "WatchLater" -> "Watch Later"
+                        else -> "Stream"
+                    },
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                // Search is a primary action, so keep it one tap away on the main screen too
+                IconButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
+                        onOpenSearchScreen()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.12f)
+                        .size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = "Search",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
             if (isLoading) {
                 HomeLoadingSkeleton()
             } else {
                 when (selectedSection) {
                     "WatchLater" -> {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                        Text(
-                            text = "Watch Later",
-                            color = t.textPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier
-                                .statusBarsPadding()
-                                .padding(start = 14.dp, top = 10.dp, bottom = 2.dp)
-                        )
                         if (watchLaterList.isEmpty()) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text(
@@ -934,7 +1077,7 @@ fun HomeScreenWithSidebar(
                             }
                         } else {
                             LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 118.dp),
+                                columns = GridCells.Adaptive(minSize = 110.dp),
                                 contentPadding = PaddingValues(12.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -956,7 +1099,6 @@ fun HomeScreenWithSidebar(
                                 }
                             }
                         }
-                        }
                     }
 
                     "Anime" -> {
@@ -976,10 +1118,7 @@ fun HomeScreenWithSidebar(
                     else -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                top = if (selectedSection == "Home") 0.dp else 12.dp,
-                                bottom = 16.dp
-                            ),
+                            contentPadding = PaddingValues(vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(18.dp)
                         ) {
                             when (selectedSection) {
@@ -1268,104 +1407,6 @@ fun HomeScreenWithSidebar(
     }
 }
 
-// ==========================================
-// SIDE RAIL — compact, icon-only, always visible (glossy style)
-// ==========================================
-
-@Composable
-fun SideRail(
-    selectedSection: String,
-    onSelectSection: (String) -> Unit,
-    onOpenSearch: () -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    val t = AppTheme.c
-    Row(modifier = Modifier.fillMaxHeight()) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(62.dp)
-                .background(t.surface.copy(alpha = 0.55f))
-                .background(t.glassSheen)
-                .statusBarsPadding()
-                .padding(vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Little brand mark
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(t.accentGradient)
-            ) {
-                Text("S", color = t.onAccent, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-
-            RailItem(
-                icon = Icons.Outlined.Search,
-                label = "Search",
-                selected = false,
-                onClick = onOpenSearch
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-
-            RailItem(Icons.Outlined.Home, "Home", selectedSection == "Home") { onSelectSection("Home") }
-            RailItem(Icons.Outlined.Movie, "Movies", selectedSection == "Movies") { onSelectSection("Movies") }
-            RailItem(Icons.Outlined.Tv, "TV Series", selectedSection == "Series") { onSelectSection("Series") }
-            RailItem(Icons.Outlined.Animation, "Anime", selectedSection == "Anime") { onSelectSection("Anime") }
-            RailItem(Icons.Outlined.BookmarkBorder, "Watch Later", selectedSection == "WatchLater") { onSelectSection("WatchLater") }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            RailItem(
-                icon = Icons.Outlined.Settings,
-                label = "Settings",
-                selected = false,
-                onClick = onOpenSettings
-            )
-        }
-        // Hairline edge so the glass rail reads as a separate pane
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(1.dp)
-                .background(t.glassBorder)
-        )
-    }
-}
-
-@Composable
-private fun RailItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val t = AppTheme.c
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(44.dp)
-            .tvFocusHighlight(RoundedCornerShape(14.dp), focusedScale = 1.1f)
-            .clip(RoundedCornerShape(14.dp))
-            .then(
-                if (selected) Modifier.background(t.accentGradient)
-                else Modifier
-            )
-            .clickable(onClick = onClick)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (selected) t.onAccent else t.textSecondary,
-            modifier = Modifier.size(22.dp)
-        )
-    }
-}
-
 @Composable
 fun AnimeCatalogSection(
     focusMemory: TvFocusMemory? = null,
@@ -1400,7 +1441,7 @@ fun AnimeCatalogSection(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                CircularProgressIndicator(color = AppTheme.c.accent)
+                CircularProgressIndicator(color = Color(0xFFE50914))
                 Text("Loading Anime Catalog (SUB)...", color = Color.LightGray, fontSize = 14.sp)
             }
         }
@@ -1420,7 +1461,7 @@ fun AnimeCatalogSection(
                             isFetchingNow = false
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
                     modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp))
                 ) {
                     Text("Retry Loading Anime", color = Color.White)
@@ -1707,7 +1748,7 @@ fun MediaDetailsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppTheme.c.background)
+            .background(Color(0xFF121212))
     ) {
         Column(
             modifier = Modifier
@@ -1736,7 +1777,7 @@ fun MediaDetailsScreen(
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = Color(0x33E50914),
-                        border = BorderStroke(1.dp, AppTheme.c.accent)
+                        border = BorderStroke(1.dp, Color(0xFFE50914))
                     ) {
                         Text(
                             text = "🇯🇵 SUBTITLED (ORIGINAL AUDIO)",
@@ -1765,7 +1806,7 @@ fun MediaDetailsScreen(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (inWatchLater) Color(0xFF3A3A3A) else AppTheme.c.glassBorder
+                        containerColor = if (inWatchLater) Color(0xFF3A3A3A) else Color(0xFF2C2C2C)
                     ),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                     modifier = Modifier
@@ -1801,7 +1842,7 @@ fun MediaDetailsScreen(
                             .fillMaxSize()
                             .background(
                                 androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, AppTheme.c.background)
+                                    colors = listOf(Color.Transparent, Color(0xFF121212))
                                 )
                             )
                     )
@@ -1877,7 +1918,7 @@ fun MediaDetailsScreen(
                 ) {
                     Text(
                         text = "${media.typeHeaderLabel} • ${media.releaseYear} • ★ ${String.format("%.1f", media.rating)}",
-                        color = AppTheme.c.accent,
+                        color = Color(0xFFE50914),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1914,7 +1955,7 @@ fun MediaDetailsScreen(
                                     origin = PlayOrigin.USER_PICK
                                 )
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
                             modifier = Modifier
@@ -2002,9 +2043,9 @@ fun MediaDetailsScreen(
                                     .focusRequester(seasonRequester)
                                     .tvFocusHighlight(RoundedCornerShape(8.dp))
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) Color(0xFF2C1A1A) else AppTheme.c.surface)
+                                    .background(if (isSelected) Color(0xFF2C1A1A) else Color(0xFF1A1A1A))
                                     .then(
-                                        if (isSelected) Modifier.border(2.dp, AppTheme.c.accent, RoundedCornerShape(8.dp))
+                                        if (isSelected) Modifier.border(2.dp, Color(0xFFE50914), RoundedCornerShape(8.dp))
                                         else Modifier
                                     )
                                     .clickable { selectedSeasonNum = season.seasonNumber }
@@ -2045,7 +2086,7 @@ fun MediaDetailsScreen(
                             Button(
                                 onClick = { selectedChunkIndex = idx },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isSelected) AppTheme.c.accent else AppTheme.c.surfaceHigh
+                                    containerColor = if (isSelected) Color(0xFFE50914) else Color(0xFF242424)
                                 ),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                 shape = RoundedCornerShape(8.dp),
@@ -2094,7 +2135,7 @@ fun MediaDetailsScreen(
                             .height(130.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = AppTheme.c.accent)
+                        CircularProgressIndicator(color = Color(0xFFE50914))
                     }
                 } else {
                     val sortedEpisodes = if (episodeSortAscending) {
@@ -2136,7 +2177,7 @@ fun MediaDetailsScreen(
                                     .focusRequester(epRequester)
                                     .tvFocusHighlight(RoundedCornerShape(8.dp))
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(AppTheme.c.surface)
+                                    .background(Color(0xFF1A1A1A))
                                     .clickable {
                                         lastPlayedEpisodeNum = ep.episodeNumber
                                         lastPlayedSeasonNum = selectedSeasonNum
@@ -2167,7 +2208,7 @@ fun MediaDetailsScreen(
                                             .align(Alignment.TopStart)
                                             .padding(5.dp)
                                             .clip(RoundedCornerShape(4.dp))
-                                            .background(AppTheme.c.accent)
+                                            .background(Color(0xFFE50914))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                     if (epSavedPos > 3_000L) {
@@ -2229,7 +2270,7 @@ fun MediaDetailsScreen(
                 confirmButton = {
                     Button(
                         onClick = { errorDialogMessage = null },
-                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
                         modifier = Modifier.tvFocusHighlight(RoundedCornerShape(50))
                     ) { Text("OK", color = Color.White) }
                 }
@@ -2267,7 +2308,7 @@ fun CastRow(
                         modifier = Modifier
                             .size(76.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(if (focused) AppTheme.c.accent else Color.Transparent)
+                            .background(if (focused) Color(0xFFE50914) else Color.Transparent)
                             .border(
                                 if (focused) 3.dp else 0.dp,
                                 if (focused) Color.White else Color.Transparent,
@@ -2344,7 +2385,7 @@ fun ProductionRow(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .tvFocusHighlight(RoundedCornerShape(10.dp))
-                        .background(AppTheme.c.surfaceHigh)
+                        .background(Color(0xFF1E1E1E))
                         .clickable { onCompanyClick(co) }
                         .padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
@@ -2387,7 +2428,7 @@ private fun TitleGridScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppTheme.c.background)
+            .background(Color(0xFF121212))
             .statusBarsPadding()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -2409,11 +2450,11 @@ private fun TitleGridScreen(
                 }
             }
         }
-        HorizontalDivider(color = AppTheme.c.glassBorder)
+        HorizontalDivider(color = Color(0xFF2C2C2C))
 
         when {
             isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AppTheme.c.accent)
+                CircularProgressIndicator(color = Color(0xFFE50914))
             }
             titles.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Nothing to show here yet.", color = Color.Gray, fontSize = 14.sp)
@@ -2539,7 +2580,7 @@ fun SearchScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppTheme.c.background)
+            .background(Color(0xFF121212))
             .statusBarsPadding()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -2577,10 +2618,10 @@ fun SearchScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = AppTheme.c.surfaceHigh,
-                    unfocusedContainerColor = AppTheme.c.surfaceHigh,
-                    focusedBorderColor = AppTheme.c.accent,
-                    unfocusedBorderColor = AppTheme.c.glassBorder,
+                    focusedContainerColor = Color(0xFF1E1E1E),
+                    unfocusedContainerColor = Color(0xFF1E1E1E),
+                    focusedBorderColor = Color(0xFFE50914),
+                    unfocusedBorderColor = Color(0xFF383838),
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 ),
@@ -2593,7 +2634,7 @@ fun SearchScreen(
             Button(
                 onClick = { performSearch() },
                 shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
                 contentPadding = PaddingValues(horizontal = 18.dp),
                 modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp)).height(52.dp)
             ) {
@@ -2643,11 +2684,11 @@ fun SearchScreen(
             )
         }
 
-        HorizontalDivider(color = AppTheme.c.glassBorder)
+        HorizontalDivider(color = Color(0xFF2C2C2C))
 
         if (isSearching) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AppTheme.c.accent)
+                CircularProgressIndicator(color = Color(0xFFE50914))
             }
         } else if (!hasSearched) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -2710,8 +2751,8 @@ fun FilterDropdownPill(
                     .height(42.dp)
                     .tvFocusHighlight(RoundedCornerShape(10.dp), focusedScale = 1.03f)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (isActive) Color(0xFF2C1A1A) else AppTheme.c.surfaceHigh)
-                    .border(1.dp, if (isActive) AppTheme.c.accent else AppTheme.c.glassBorder, RoundedCornerShape(10.dp))
+                    .background(if (isActive) Color(0xFF2C1A1A) else Color(0xFF1E1E1E))
+                    .border(1.dp, if (isActive) Color(0xFFE50914) else Color(0xFF383838), RoundedCornerShape(10.dp))
                     .clickable { onExpandedChange(true) }
                     .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -2729,7 +2770,7 @@ fun FilterDropdownPill(
                 )
                 Text(
                     text = "▾",
-                    color = if (isActive) AppTheme.c.accent else Color.Gray,
+                    color = if (isActive) Color(0xFFE50914) else Color.Gray,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(start = 4.dp)
                 )
@@ -2740,14 +2781,14 @@ fun FilterDropdownPill(
                 onDismissRequest = { onExpandedChange(false) },
                 modifier = Modifier
                     .heightIn(max = 280.dp)
-                    .background(AppTheme.c.surfaceHigh)
+                    .background(Color(0xFF1E1E1E))
             ) {
                 options.forEach { option ->
                     DropdownMenuItem(
                         text = {
                             Text(
                                 text = option,
-                                color = if (option == selectedValue) AppTheme.c.accent else Color.White,
+                                color = if (option == selectedValue) Color(0xFFE50914) else Color.White,
                                 fontWeight = if (option == selectedValue) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 13.sp
                             )
@@ -2767,104 +2808,6 @@ fun FilterDropdownPill(
 // 5. SETTINGS & ACCOUNTS SCREEN (TMDB + ANILIST)
 // ==========================================
 
-
-// ==========================================
-// SETTINGS — APPEARANCE / THEME PICKER
-// ==========================================
-
-/** Small rounded icon tile used at the start of each settings card header. */
-@Composable
-fun SettingsIconTile(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color? = null) {
-    val t = AppTheme.c
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(38.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(t.surfaceHigh)
-            .border(1.dp, t.glassBorder, RoundedCornerShape(12.dp))
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint ?: t.accent,
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-/** Theme picker — tap a swatch to restyle the whole app instantly. */
-@Composable
-fun AppearanceCard() {
-    val t = AppTheme.c
-    val context = LocalContext.current
-    Card(
-        colors = CardDefaults.cardColors(containerColor = t.surface),
-        shape = RoundedCornerShape(18.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, t.glassBorder, RoundedCornerShape(18.dp))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SettingsIconTile(Icons.Outlined.Palette)
-                Column {
-                    Text("Appearance", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text("Pick a theme — changes apply instantly", color = t.textFaint, fontSize = 12.sp)
-                }
-            }
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                items(AppThemes.all) { spec ->
-                    val selected = t.id == spec.id
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier
-                            .tvFocusHighlight(RoundedCornerShape(14.dp), focusedScale = 1.08f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable { AppTheme.select(context, spec) }
-                            .padding(6.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(spec.accentGradient)
-                                .border(
-                                    width = if (selected) 2.dp else 1.dp,
-                                    color = if (selected) Color.White else t.glassBorder,
-                                    shape = CircleShape
-                                )
-                        ) {
-                            if (selected) {
-                                Icon(
-                                    imageVector = Icons.Filled.Check,
-                                    contentDescription = "Selected",
-                                    tint = spec.onAccent,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = spec.label,
-                            color = if (selected) Color.White else t.textSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun SettingsScreen(
     onAccountChanged: () -> Unit,
@@ -2883,7 +2826,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppTheme.c.background)
+            .background(Color(0xFF121212))
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
@@ -2894,33 +2837,24 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(text = "Settings", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                Text(text = "Appearance & accounts", color = AppTheme.c.textFaint, fontSize = 12.sp)
-            }
+            Text(text = "Settings & Accounts", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             OutlinedButton(
                 onClick = {
                     focusManager.clearFocus()
                     keyboardController?.hide()
                     onBack()
                 },
-                modifier = Modifier.tvFocusHighlight(RoundedCornerShape(50)).height(36.dp),
-                shape = RoundedCornerShape(50),
-                border = BorderStroke(1.dp, AppTheme.c.glassBorder),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
+                modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp)).height(36.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 Text("← Done", color = Color.White, fontSize = 13.sp)
             }
         }
 
-        AppearanceCard()
-
         Card(
-            colors = CardDefaults.cardColors(containerColor = AppTheme.c.surface),
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, AppTheme.c.glassBorder, RoundedCornerShape(18.dp))
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1B)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -2931,16 +2865,9 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.weight(1f).padding(end = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        SettingsIconTile(Icons.Outlined.Theaters)
-                        Column {
+                    Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
                         Text("TMDB Account", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                         Text("Syncs Movies & Series Watchlists", color = Color.Gray, fontSize = 12.sp)
-                        }
                     }
                     Surface(
                         shape = RoundedCornerShape(6.dp),
@@ -3018,7 +2945,7 @@ fun SettingsScreen(
                             }
                         },
                         enabled = !isTmdbLoading,
-                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp))
                             .fillMaxWidth()
@@ -3077,11 +3004,9 @@ fun AniListSettingsCard(onAccountChanged: () -> Unit) {
     }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = AppTheme.c.surface),
-        shape = RoundedCornerShape(18.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, AppTheme.c.glassBorder, RoundedCornerShape(18.dp))
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1B)),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -3092,16 +3017,9 @@ fun AniListSettingsCard(onAccountChanged: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f).padding(end = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    SettingsIconTile(Icons.Outlined.CloudSync, tint = Color(0xFF02A9FF))
-                    Column {
+                Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
                     Text("AniList Account", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Text("Syncs Watching & Planning Anime Lists", color = Color.Gray, fontSize = 12.sp)
-                    }
                 }
                 Surface(
                     shape = RoundedCornerShape(6.dp),
@@ -3182,13 +3100,13 @@ fun AniListSettingsCard(onAccountChanged: () -> Unit) {
                     .fillMaxSize()
                     .padding(12.dp),
                 shape = RoundedCornerShape(14.dp),
-                color = AppTheme.c.surface
+                color = Color(0xFF161616)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(AppTheme.c.surfaceHigh)
+                            .background(Color(0xFF222222))
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically

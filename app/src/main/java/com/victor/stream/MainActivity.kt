@@ -31,7 +31,6 @@ import com.victor.stream.ui.SearchScreen
 import com.victor.stream.ui.SettingsScreen
 import com.victor.stream.ui.RemoteKeyRouter
 import com.victor.stream.ui.TvFocusMemory
-import com.victor.stream.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
@@ -42,23 +41,14 @@ class MainActivity : ComponentActivity() {
         setTheme(R.style.Theme_Stream)
         super.onCreate(savedInstanceState)
         ServiceLocator.init(applicationContext)
-        AppTheme.init(applicationContext)
         DebugCapture.attach(applicationContext)
         (ServiceLocator.streamResolver as? WebViewStreamResolver)?.attachHostToActivity(this)
 
         setContent {
-            val theme = AppTheme.c
-            MaterialTheme(
-                colorScheme = darkColorScheme(
-                    primary = theme.accent,
-                    secondary = theme.accent,
-                    background = theme.background,
-                    surface = theme.surface
-                )
-            ) {
+            MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = theme.background
+                    color = Color(0xFF121212)
                 ) {
                     AppNavHost()
                 }
@@ -163,7 +153,7 @@ fun AppNavHost() {
         startDestination = "main",
         modifier = Modifier
             .fillMaxSize()
-            .background(AppTheme.c.background)
+            .background(Color(0xFF121212))
     ) {
         composable("main") {
             HomeScreenWithSidebar(
