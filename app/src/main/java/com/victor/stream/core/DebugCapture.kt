@@ -67,9 +67,15 @@ object DebugCapture {
     private const val MAX_LINES_IN_MEMORY = 6000
     private const val MAX_FILE_BYTES = 1_500_000L // ~1.5 MB; trimmed on open
 
-    /** Master on/off. When false, nothing new is recorded (existing log stays). */
+    private const val PREFS_NAME = "debug_capture_prefs"
+    private const val KEY_ENABLED = "capture_enabled"
+
+    /**
+     * Master on/off. OFF by default — nothing is recorded until the user
+     * turns it on in Settings. The choice is persisted across restarts.
+     */
     @Volatile
-    var enabled: Boolean = true
+    var enabled: Boolean = false
 
     private val lock = Any()
     private val buffer = ArrayDeque<String>()
@@ -80,6 +86,11 @@ object DebugCapture {
     /** Call once, early (e.g. in MainActivity.onCreate). Safe to call more than once. */
     fun attach(context: Context) {
         val app = context.applicationContext
+        enabled = try {
+            app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, false)
+        } catch (_: Throwable) {
+            false
+        }
         synchronized(lock) {
             appContext = app
             try {
@@ -102,6 +113,20 @@ object DebugCapture {
         // Mark the start of a fresh run so sessions are easy to tell apart.
         appendRaw("")
         appendRaw("──────────── APP OPENED @ ${sessionStamp.format(Date())} ────────────")
+    }
+
+    /** Turn capture on/off and remember the choice. */
+    fun setEnabled(context: Context, value: Boolean) {
+        enabled = value
+        try {
+            context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_ENABLED, value)
+                .apply()
+        } catch (_: Throwable) {
+        }
+        if (value) appendRaw("--- capture turned ON by user ---")
     }
 
     private fun logFile(): File? = appContext?.let { File(it.filesDir, FILE_NAME) }
@@ -165,6 +190,7 @@ object DebugCapture {
 /** Drop this into SettingsScreen to expose the capturer. */
 @Composable
 fun DebugCaptureCard() {
+    val context = LocalContext.current
     var captureOn by remember { mutableStateOf(DebugCapture.enabled) }
     var showViewer by remember { mutableStateOf(false) }
 
@@ -185,7 +211,7 @@ fun DebugCaptureCard() {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Debug Capture", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Records a readable timeline of what the app does (screens, play attempts, each server, errors). Survives restarts.",
+                        "Off by default. Turn on only when you need to capture a problem — records what the app does (screens, play attempts, each server, errors).",
                         color = Color.Gray,
                         fontSize = 12.sp
                     )
@@ -194,7 +220,7 @@ fun DebugCaptureCard() {
                     checked = captureOn,
                     onCheckedChange = {
                         captureOn = it
-                        DebugCapture.enabled = it
+                        DebugCapture.setEnabled(context, it)
                     }
                 )
             }

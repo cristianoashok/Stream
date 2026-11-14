@@ -31,6 +31,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -172,25 +174,23 @@ fun ContinueWatchingRow(
         Text(
             text = "Continue Watching",
             color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 14.dp)
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             itemsIndexed(continueList) { index, entry ->
                 val itemKey = "$rowKey#${entry.media.id}"
                 val t = AppTheme.c
-                Column(
+                Box(
                     modifier = Modifier
-                        .width(124.dp)
+                        .width(112.dp)
                         .tvRememberedFocus(itemKey, index, isFirstRow, focusMemory)
-                        .tvFocusHighlight(RoundedCornerShape(16.dp))
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(t.surface)
-                        .border(1.dp, t.glassBorder, RoundedCornerShape(16.dp))
+                        .tvFocusHighlight(RoundedCornerShape(5.dp), focusedScale = 1.08f)
+                        .clip(RoundedCornerShape(5.dp))
                         .combinedClickable(
                             onClick = {
                                 focusMemory?.pendingKey = itemKey
@@ -199,68 +199,58 @@ fun ContinueWatchingRow(
                             onLongClick = { showPopupFor = entry }
                         )
                 ) {
-                    Box(modifier = Modifier.padding(5.dp)) {
-                        AsyncImage(
-                            model = entry.media.posterUrl,
-                            contentDescription = entry.media.title,
-                            contentScale = ContentScale.Crop,
+                    AsyncImage(
+                        model = entry.media.posterUrl,
+                        contentDescription = entry.media.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(165.dp)
+                            .background(Color(0xFF181818))
+                    )
+                    if (entry.seasonNumber != null && entry.episodeNumber != null) {
+                        Text(
+                            text = "S${entry.seasonNumber}:E${entry.episodeNumber}",
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(5.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xB3000000))
+                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                    val minsLeft = if (entry.durationMs > 0L) {
+                        ((entry.durationMs - entry.positionMs).coerceAtLeast(0L) / 60000L).toInt()
+                    } else -1
+                    if (minsLeft >= 0) {
+                        Text(
+                            text = if (minsLeft == 0) "Almost done" else "$minsLeft min",
+                            color = Color.White,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 4.dp, bottom = 8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xB3000000))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                    if (entry.durationMs > 0L) {
+                        LinearProgressIndicator(
+                            progress = {
+                                (entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f)
+                            },
+                            color = t.accent,
+                            trackColor = Color(0x80333333),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(158.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.DarkGray)
+                                .height(3.dp)
+                                .align(Alignment.BottomCenter)
                         )
-                        if (entry.seasonNumber != null && entry.episodeNumber != null) {
-                            Text(
-                                text = "S${entry.seasonNumber}:E${entry.episodeNumber}",
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(5.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xB3000000))
-                                    .padding(horizontal = 5.dp, vertical = 2.dp)
-                            )
-                        }
-                        if (entry.durationMs > 0L) {
-                            LinearProgressIndicator(
-                                progress = {
-                                    (entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f)
-                                },
-                                color = t.accent,
-                                trackColor = Color(0x66000000),
-                                modifier = Modifier
-                                    .padding(horizontal = 6.dp, vertical = 6.dp)
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .align(Alignment.BottomCenter)
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.padding(start = 9.dp, end = 9.dp, top = 2.dp, bottom = 8.dp)) {
-                        Text(
-                            text = entry.media.title,
-                            color = t.textPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        val minsLeft = if (entry.durationMs > 0L) {
-                            ((entry.durationMs - entry.positionMs).coerceAtLeast(0L) / 60000L).toInt()
-                        } else -1
-                        if (minsLeft >= 0) {
-                            Text(
-                                text = if (minsLeft == 0) "Almost done" else "$minsLeft min left",
-                                color = t.textFaint,
-                                fontSize = 10.sp,
-                                maxLines = 1,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
                     }
                 }
             }
@@ -305,13 +295,13 @@ fun MediaCarouselRow(
         Text(
             text = title,
             color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 14.dp)
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             itemsIndexed(items) { index, item ->
                 PosterCard(
@@ -320,7 +310,7 @@ fun MediaCarouselRow(
                     isWatchLaterScreen = false,
                     onClick = { onMediaClick(item) },
                     onWatchLaterChanged = onWatchLaterChanged,
-                    modifier = Modifier.width(124.dp),
+                    modifier = Modifier.width(112.dp),
                     focusKey = "$title#${item.id}",
                     focusIndex = index,
                     isFirstRow = isFirstRow,
@@ -351,16 +341,14 @@ fun PosterCard(
     // NOTE: no separate .focusable() here. combinedClickable is already focusable;
     // an extra focusable() created two focus stops, so OK had to be pressed twice.
     val t = AppTheme.c
-    Column(
+    Box(
         modifier = modifier
             .then(
                 if (focusKey != null) Modifier.tvRememberedFocus(focusKey, focusIndex, isFirstRow, focusMemory)
                 else Modifier
             )
-            .tvFocusHighlight(RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
-            .background(t.surface)
-            .border(1.dp, t.glassBorder, RoundedCornerShape(16.dp))
+            .tvFocusHighlight(RoundedCornerShape(5.dp), focusedScale = 1.08f)
+            .clip(RoundedCornerShape(5.dp))
             .combinedClickable(
                 onClick = {
                     if (focusKey != null) focusMemory?.pendingKey = focusKey
@@ -369,79 +357,41 @@ fun PosterCard(
                 onLongClick = { showWatchLaterPopup = true }
             )
     ) {
-        Box {
-            AsyncImage(
-                model = item.posterUrl,
-                contentDescription = item.title,
-                contentScale = ContentScale.Crop,
+        AsyncImage(
+            model = item.posterUrl,
+            contentDescription = item.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(165.dp)
+                .background(Color(0xFF181818))
+        )
+        if (rankNumber != null) {
+            Text(
+                text = "#$rankNumber",
+                color = t.onAccent,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier
+                    .align(Alignment.TopStart)
                     .padding(5.dp)
-                    .fillMaxWidth()
-                    .height(158.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.DarkGray)
-            )
-            if (rankNumber != null) {
-                Text(
-                    text = "#$rankNumber",
-                    color = t.onAccent,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(10.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(t.accentGradient)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-            Text(
-                text = item.badgeLabel,
-                color = Color.White,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(10.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xB3000000))
-                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(t.accentGradient)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             )
         }
-        Column(modifier = Modifier.padding(start = 9.dp, end = 9.dp, top = 2.dp, bottom = 8.dp)) {
-            Text(
-                text = item.title,
-                color = t.textPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                modifier = Modifier.padding(top = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = null,
-                    tint = t.accent,
-                    modifier = Modifier.size(11.dp)
-                )
-                Text(
-                    text = String.format("%.1f", item.rating),
-                    color = t.textSecondary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "•  ${item.releaseYear.take(4)}",
-                    color = t.textFaint,
-                    fontSize = 10.sp,
-                    maxLines = 1
-                )
-            }
-        }
+        Text(
+            text = item.badgeLabel,
+            color = Color.White,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(5.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xB3000000))
+                .padding(horizontal = 5.dp, vertical = 2.dp)
+        )
     }
 
     if (showWatchLaterPopup) {
@@ -570,21 +520,12 @@ private fun ShimmerRow(posterCount: Int = 6) {
             userScrollEnabled = false
         ) {
             items(posterCount) {
-                Column(modifier = Modifier.width(124.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(168.dp)
-                            .shimmer(RoundedCornerShape(16.dp))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 6.dp)
-                            .fillMaxWidth(0.8f)
-                            .height(12.dp)
-                            .shimmer(RoundedCornerShape(4.dp))
-                    )
-                }
+                Box(
+                    modifier = Modifier
+                        .width(112.dp)
+                        .height(165.dp)
+                        .shimmer(RoundedCornerShape(5.dp))
+                )
             }
         }
     }
@@ -602,7 +543,7 @@ fun HomeLoadingSkeleton() {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp)
+                .height(340.dp)
                 .shimmer(RoundedCornerShape(0.dp))
         )
         ShimmerRow()
@@ -652,6 +593,22 @@ fun HeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemModel) -> Unit) 
     if (items.isEmpty()) return
     val listState = rememberLazyListState()
     val fling = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(lazyListState = listState)
+    val isTv = rememberIsTv()
+
+    // Auto-advance the carousel every few seconds (phones only — on TV it
+    // would fight with remote focus). Pauses while the user is swiping.
+    if (!isTv && items.size > 1) {
+        LaunchedEffect(items.size) {
+            while (true) {
+                delay(7000)
+                if (!listState.isScrollInProgress) {
+                    val next = (listState.firstVisibleItemIndex + 1) % items.size
+                    runCatching { listState.animateScrollToItem(next) }
+                }
+            }
+        }
+    }
+
     Box {
         LazyRow(
             state = listState,
@@ -665,30 +622,34 @@ fun HeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemModel) -> Unit) 
                 )
             }
         }
-        // Page dots, floating over the bottom-right corner of the hero
+        // Animated page dots floating over the bottom-right of the hero
         val current = listState.firstVisibleItemIndex
         Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 14.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color(0x59000000))
-                .padding(horizontal = 8.dp, vertical = 5.dp)
+                .padding(end = 18.dp, bottom = 12.dp)
         ) {
             items.forEachIndexed { index, _ ->
+                val w by animateDpAsState(
+                    targetValue = if (index == current) 16.dp else 6.dp,
+                    animationSpec = tween(300),
+                    label = "dotW"
+                )
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 3.dp)
-                        .size(if (index == current) 7.dp else 5.dp)
-                        .clip(CircleShape)
-                        .background(if (index == current) AppTheme.c.accent else Color(0x80FFFFFF))
+                        .height(6.dp)
+                        .width(w)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (index == current) AppTheme.c.accent else Color(0x66FFFFFF))
                 )
             }
         }
     }
 }
 
-/** Full-bleed backdrop "hero" for a featured title — Netflix-TV style. */
+/** Full-bleed hero with the info block at the top-left, TV-app style. */
 @Composable
 fun FeaturedHero(
     item: MediaItemModel,
@@ -699,94 +660,105 @@ fun FeaturedHero(
 ) {
     val t = AppTheme.c
     val heroImage = item.backdropUrl.ifBlank { item.posterUrl }
-    Box(modifier = modifier.height(300.dp)) {
+    Box(modifier = modifier.height(340.dp)) {
         AsyncImage(
             model = heroImage,
             contentDescription = item.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.DarkGray)
+                .background(Color(0xFF181818))
         )
-        // Fade the backdrop into the page background at the bottom...
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Transparent, t.background),
-                        startY = 0f
-                    )
-                )
-        )
-        // ...and darken the left edge so the text stays readable.
+        // Darken the left side so the info block reads clearly...
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(t.background.copy(alpha = 0.88f), Color.Transparent),
-                        endX = 900f
+                        colors = listOf(t.background, t.background.copy(alpha = 0.55f), Color.Transparent),
+                        endX = 1100f
+                    )
+                )
+        )
+        // ...and melt the bottom into the page so the rows overlap naturally.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Transparent, t.background)
                     )
                 )
         )
         Column(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(start = 18.dp, top = 26.dp, end = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
-            // Meta line: type badge + rating + year in a small glass pill row
+            // "SERIES" / "MOVIE" kicker with a small accent square
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                Text(
-                    text = item.badgeLabel,
-                    color = t.onAccent,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
+                        .size(10.dp)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(t.accentGradient)
-                        .padding(horizontal = 7.dp, vertical = 2.dp)
-                )
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = null,
-                    tint = t.accent,
-                    modifier = Modifier.size(13.dp)
                 )
                 Text(
-                    text = String.format("%.1f", item.rating) + "   •   " + item.releaseYear.take(4),
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
+                    text = item.badgeLabel.uppercase(),
+                    color = Color(0xFFDADADA),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 4.sp
                 )
             }
             Text(
                 text = item.title,
                 color = Color.White,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(0.8f)
-            )
-            Text(
-                text = item.overview,
-                color = Color(0xFFD4D4D8),
-                fontSize = 12.sp,
+                fontSize = 34.sp,
+                lineHeight = 38.sp,
+                fontWeight = FontWeight.Black,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(0.72f)
             )
             Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "TMDB",
+                    color = Color.Black,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0xFFF5C518))
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+                Text(
+                    text = String.format("%.1f", item.rating) + "/10",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = item.releaseYear.take(4),
+                    color = t.accent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 5.dp)
+                modifier = Modifier.padding(top = 6.dp)
             ) {
-                // Filled "Play" pill
+                // Filled accent "Play" pill
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -802,7 +774,7 @@ fun FeaturedHero(
                             if (focusMemory != null) focusMemory.pendingKey = "hero#${item.id}"
                             onPlay(item)
                         }
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                        .padding(horizontal = 22.dp, vertical = 9.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
@@ -812,18 +784,17 @@ fun FeaturedHero(
                     )
                     Text("Play", color = t.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
-                // Glass "Details" pill
+                // White "Details" pill (like the reference's second button)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
                         .clip(RoundedCornerShape(50))
-                        .background(t.glass)
-                        .border(1.dp, t.glassBorder, RoundedCornerShape(50))
+                        .background(Color(0xFFEDEDED))
                         .clickable { onPlay(item) }
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                        .padding(horizontal = 20.dp, vertical = 9.dp)
                 ) {
-                    Text("Details", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Details", color = Color(0xFF111111), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -912,7 +883,12 @@ fun HomeScreenWithSidebar(
             if (isLoading) {
                 HomeLoadingSkeleton()
             } else {
-                when (selectedSection) {
+                Crossfade(
+                    targetState = selectedSection,
+                    animationSpec = tween(260),
+                    label = "sectionFade"
+                ) { section ->
+                when (section) {
                     "WatchLater" -> {
                         Column(modifier = Modifier.fillMaxSize()) {
                         Text(
@@ -934,9 +910,9 @@ fun HomeScreenWithSidebar(
                             }
                         } else {
                             LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 118.dp),
-                                contentPadding = PaddingValues(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                columns = GridCells.Adaptive(minSize = 110.dp),
+                                contentPadding = PaddingValues(14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
@@ -977,12 +953,12 @@ fun HomeScreenWithSidebar(
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
-                                top = if (selectedSection == "Home") 0.dp else 12.dp,
+                                top = if (section == "Home") 0.dp else 12.dp,
                                 bottom = 16.dp
                             ),
                             verticalArrangement = Arrangement.spacedBy(18.dp)
                         ) {
-                            when (selectedSection) {
+                            when (section) {
                                 "Home" -> {
                                     val heroItems = trendingAll
                                         .filter { it.backdropUrl.isNotBlank() }
@@ -1263,13 +1239,14 @@ fun HomeScreenWithSidebar(
                         }
                     }
                 }
+                }
             }
         }
     }
 }
 
 // ==========================================
-// SIDE RAIL — compact, icon-only, always visible (glossy style)
+// SIDE RAIL — compact, icon-only, always visible
 // ==========================================
 
 @Composable
@@ -1280,59 +1257,37 @@ fun SideRail(
     onOpenSettings: () -> Unit
 ) {
     val t = AppTheme.c
-    Row(modifier = Modifier.fillMaxHeight()) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(62.dp)
-                .background(t.surface.copy(alpha = 0.55f))
-                .background(t.glassSheen)
-                .statusBarsPadding()
-                .padding(vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Little brand mark
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(t.accentGradient)
-            ) {
-                Text("S", color = t.onAccent, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-            }
-            Spacer(modifier = Modifier.height(10.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(56.dp)
+            .background(t.background)
+            .statusBarsPadding()
+            .padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        RailItem(
+            icon = Icons.Outlined.Search,
+            label = "Search",
+            selected = false,
+            onClick = onOpenSearch
+        )
+        Spacer(modifier = Modifier.height(8.dp))
 
-            RailItem(
-                icon = Icons.Outlined.Search,
-                label = "Search",
-                selected = false,
-                onClick = onOpenSearch
-            )
-            Spacer(modifier = Modifier.height(2.dp))
+        RailItem(Icons.Outlined.Home, "Home", selectedSection == "Home") { onSelectSection("Home") }
+        RailItem(Icons.Outlined.Movie, "Movies", selectedSection == "Movies") { onSelectSection("Movies") }
+        RailItem(Icons.Outlined.Tv, "TV Series", selectedSection == "Series") { onSelectSection("Series") }
+        RailItem(Icons.Outlined.Animation, "Anime", selectedSection == "Anime") { onSelectSection("Anime") }
+        RailItem(Icons.Outlined.BookmarkBorder, "Watch Later", selectedSection == "WatchLater") { onSelectSection("WatchLater") }
 
-            RailItem(Icons.Outlined.Home, "Home", selectedSection == "Home") { onSelectSection("Home") }
-            RailItem(Icons.Outlined.Movie, "Movies", selectedSection == "Movies") { onSelectSection("Movies") }
-            RailItem(Icons.Outlined.Tv, "TV Series", selectedSection == "Series") { onSelectSection("Series") }
-            RailItem(Icons.Outlined.Animation, "Anime", selectedSection == "Anime") { onSelectSection("Anime") }
-            RailItem(Icons.Outlined.BookmarkBorder, "Watch Later", selectedSection == "WatchLater") { onSelectSection("WatchLater") }
+        Spacer(modifier = Modifier.weight(1f))
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            RailItem(
-                icon = Icons.Outlined.Settings,
-                label = "Settings",
-                selected = false,
-                onClick = onOpenSettings
-            )
-        }
-        // Hairline edge so the glass rail reads as a separate pane
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(1.dp)
-                .background(t.glassBorder)
+        RailItem(
+            icon = Icons.Outlined.Settings,
+            label = "Settings",
+            selected = false,
+            onClick = onOpenSettings
         )
     }
 }
@@ -1345,23 +1300,33 @@ private fun RailItem(
     onClick: () -> Unit
 ) {
     val t = AppTheme.c
-    Box(
-        contentAlignment = Alignment.Center,
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .size(44.dp)
-            .tvFocusHighlight(RoundedCornerShape(14.dp), focusedScale = 1.1f)
-            .clip(RoundedCornerShape(14.dp))
-            .then(
-                if (selected) Modifier.background(t.accentGradient)
-                else Modifier
-            )
+            .tvFocusHighlight(RoundedCornerShape(10.dp), focusedScale = 1.15f)
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 7.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = if (selected) t.onAccent else t.textSecondary,
+            tint = if (selected) Color.White else Color(0xFF8C8C8C),
             modifier = Modifier.size(22.dp)
+        )
+        // The reference design's little accent underline under the active icon
+        val w by animateDpAsState(
+            targetValue = if (selected) 18.dp else 0.dp,
+            animationSpec = tween(250),
+            label = "railUnderline"
+        )
+        Box(
+            modifier = Modifier
+                .padding(top = 3.dp)
+                .height(2.dp)
+                .width(w)
+                .clip(RoundedCornerShape(50))
+                .background(t.accent)
         )
     }
 }
@@ -2870,6 +2835,192 @@ fun SettingsScreen(
     onAccountChanged: () -> Unit,
     onBack: () -> Unit
 ) {
+    val t = AppTheme.c
+    var accountPage by rememberSaveable { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = accountPage != null) { accountPage = null }
+
+    Crossfade(targetState = accountPage, animationSpec = tween(240), label = "settingsPage") { page ->
+        when (page) {
+            "tmdb" -> AccountSubPage(title = "TMDB Account", onBack = { accountPage = null }) {
+                TmdbSettingsCard(onAccountChanged = onAccountChanged)
+            }
+            "anilist" -> AccountSubPage(title = "AniList Account", onBack = { accountPage = null }) {
+                AniListSettingsCard(onAccountChanged = onAccountChanged)
+            }
+            else -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(t.background)
+                    .statusBarsPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(text = "Settings", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(text = "Appearance, accounts & tools", color = t.textFaint, fontSize = 12.sp)
+                    }
+                    OutlinedButton(
+                        onClick = onBack,
+                        modifier = Modifier.tvFocusHighlight(RoundedCornerShape(50)).height(36.dp),
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, t.glassBorder),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
+                    ) {
+                        Text("\u2190 Done", color = Color.White, fontSize = 13.sp)
+                    }
+                }
+
+                AppearanceCard()
+
+                AccountsCard(onOpen = { accountPage = it })
+
+                DebugCaptureCard()
+            }
+        }
+    }
+}
+
+/** The "Accounts" list — tap an account to open its own login page. */
+@Composable
+fun AccountsCard(onOpen: (String) -> Unit) {
+    val t = AppTheme.c
+    // Re-read link status every time this card comes back on screen
+    var statusTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { statusTick += 1 }
+    val tmdbLinked = remember(statusTick) { ServiceLocator.prefsStore.getTmdbAuth().sessionId != null }
+    val aniLinked = remember(statusTick) { ServiceLocator.prefsStore.getAniListAuth().token != null }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = t.surface),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, t.glassBorder, RoundedCornerShape(18.dp))
+    ) {
+        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+            Text(
+                text = "Accounts",
+                color = Color.White,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 4.dp)
+            )
+            AccountRow(
+                icon = Icons.Outlined.Theaters,
+                iconTint = null,
+                title = "TMDB",
+                subtitle = "Movies & series watchlist sync",
+                linked = tmdbLinked,
+                onClick = { onOpen("tmdb") }
+            )
+            HorizontalDivider(
+                color = t.glassBorder,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            AccountRow(
+                icon = Icons.Outlined.CloudSync,
+                iconTint = Color(0xFF02A9FF),
+                title = "AniList",
+                subtitle = "Watching & planning anime sync",
+                linked = aniLinked,
+                onClick = { onOpen("anilist") }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccountRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color?,
+    title: String,
+    subtitle: String,
+    linked: Boolean,
+    onClick: () -> Unit
+) {
+    val t = AppTheme.c
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .tvFocusHighlight(RoundedCornerShape(12.dp), focusedScale = 1.02f)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 11.dp)
+    ) {
+        SettingsIconTile(icon, tint = iconTint)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = t.textFaint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = if (linked) Color(0x334CAF50) else Color(0x33FF9800)
+        ) {
+            Text(
+                text = if (linked) "CONNECTED" else "NOT LINKED",
+                color = if (linked) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+        }
+        Text("\u203A", color = t.textFaint, fontSize = 22.sp)
+    }
+}
+
+/** Full page wrapper for one account's login/management screen. */
+@Composable
+fun AccountSubPage(
+    title: String,
+    onBack: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val t = AppTheme.c
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(t.background)
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(36.dp)
+                    .tvFocusHighlight(CircleShape, focusedScale = 1.12f)
+                    .clip(CircleShape)
+                    .background(t.surfaceHigh)
+                    .border(1.dp, t.glassBorder, CircleShape)
+                    .clickable(onClick = onBack)
+            ) {
+                Text("\u2190", color = Color.White, fontSize = 16.sp)
+            }
+            Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        content()
+    }
+}
+
+/** TMDB login / logout card (shown inside its own page). */
+@Composable
+fun TmdbSettingsCard(onAccountChanged: () -> Unit) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
@@ -2879,41 +3030,6 @@ fun SettingsScreen(
     var tmdbPasswordInput by remember { mutableStateOf("") }
     var isTmdbLoading by remember { mutableStateOf(false) }
     var tmdbStatusMessage by remember { mutableStateOf<String?>(null) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppTheme.c.background)
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(text = "Settings", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                Text(text = "Appearance & accounts", color = AppTheme.c.textFaint, fontSize = 12.sp)
-            }
-            OutlinedButton(
-                onClick = {
-                    focusManager.clearFocus()
-                    keyboardController?.hide()
-                    onBack()
-                },
-                modifier = Modifier.tvFocusHighlight(RoundedCornerShape(50)).height(36.dp),
-                shape = RoundedCornerShape(50),
-                border = BorderStroke(1.dp, AppTheme.c.glassBorder),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
-            ) {
-                Text("← Done", color = Color.White, fontSize = 13.sp)
-            }
-        }
-
-        AppearanceCard()
 
         Card(
             colors = CardDefaults.cardColors(containerColor = AppTheme.c.surface),
@@ -3036,11 +3152,6 @@ fun SettingsScreen(
                 }
             }
         }
-
-        AniListSettingsCard(onAccountChanged = onAccountChanged)
-
-        DebugCaptureCard()
-    }
 }
 
 @SuppressLint("SetJavaScriptEnabled")

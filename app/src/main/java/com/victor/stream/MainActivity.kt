@@ -4,6 +4,11 @@ import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -161,6 +166,17 @@ fun AppNavHost() {
     NavHost(
         navController = navController,
         startDestination = "main",
+        // Gentle fade + drift between screens
+        enterTransition = {
+            fadeIn(animationSpec = tween(280)) +
+                slideInHorizontally(initialOffsetX = { it / 14 }, animationSpec = tween(280))
+        },
+        exitTransition = { fadeOut(animationSpec = tween(200)) },
+        popEnterTransition = { fadeIn(animationSpec = tween(280)) },
+        popExitTransition = {
+            fadeOut(animationSpec = tween(200)) +
+                slideOutHorizontally(targetOffsetX = { it / 14 }, animationSpec = tween(200))
+        },
         modifier = Modifier
             .fillMaxSize()
             .background(AppTheme.c.background)
