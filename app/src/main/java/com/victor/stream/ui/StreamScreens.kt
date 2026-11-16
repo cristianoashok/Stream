@@ -39,6 +39,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -624,6 +625,19 @@ private fun TvHeroPager(
     if (idx >= items.size) idx = 0
     val current = items[idx]
 
+    // The Details button is one static composable (so remote focus never
+    // breaks), but it visually rides along with each page change.
+    val buttonSlide = remember { Animatable(0f) }
+    var firstHeroShow by remember { mutableStateOf(true) }
+    LaunchedEffect(idx) {
+        if (firstHeroShow) {
+            firstHeroShow = false
+        } else {
+            buttonSlide.snapTo(heroDir * 180f)
+            buttonSlide.animateTo(0f, animationSpec = tween(420))
+        }
+    }
+
     Box(modifier = Modifier
         .fillMaxWidth()
         .height(340.dp)
@@ -681,6 +695,10 @@ private fun TvHeroPager(
                 .align(Alignment.TopStart)
                 .statusBarsPadding()
                 .padding(start = 18.dp, top = 186.dp)
+                .graphicsLayer {
+                    translationX = buttonSlide.value
+                    alpha = (1f - kotlin.math.abs(buttonSlide.value) / 320f).coerceIn(0.2f, 1f)
+                }
                 .then(
                     if (focusMemory != null) Modifier.tvRememberedFocus("hero", 0, true, focusMemory)
                     else Modifier
