@@ -31,7 +31,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -44,12 +51,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Theaters
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -613,6 +620,7 @@ private fun TvHeroPager(
 ) {
     val t = AppTheme.c
     var idx by rememberSaveable { mutableIntStateOf(0) }
+    var heroDir by remember { mutableIntStateOf(1) }
     if (idx >= items.size) idx = 0
     val current = items[idx]
 
@@ -620,8 +628,16 @@ private fun TvHeroPager(
         .fillMaxWidth()
         .height(340.dp)
     ) {
-        // Backdrop + text crossfade together; the button below stays put.
-        Crossfade(targetState = idx, animationSpec = tween(420), label = "heroPage") { i ->
+        // Backdrop + text slide in the direction you pressed; the button stays put.
+        AnimatedContent(
+            targetState = idx,
+            transitionSpec = {
+                val d = heroDir
+                (slideInHorizontally(animationSpec = tween(420)) { full -> full / 2 * d } + fadeIn(tween(420))) togetherWith
+                    (slideOutHorizontally(animationSpec = tween(380)) { full -> -full / 2 * d } + fadeOut(tween(260)))
+            },
+            label = "heroPage"
+        ) { i ->
             val media = items[i.coerceIn(0, items.size - 1)]
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
@@ -673,11 +689,13 @@ private fun TvHeroPager(
                     if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (ev.key) {
                         Key.DirectionRight -> {
+                            heroDir = 1
                             idx = (idx + 1) % items.size
                             true
                         }
                         Key.DirectionLeft -> {
                             if (idx > 0) {
+                                heroDir = -1
                                 idx -= 1
                                 true
                             } else {
@@ -762,8 +780,7 @@ private fun HeroSlide(
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(start = 18.dp, top = 26.dp, end = 18.dp),
+                .padding(start = 18.dp, top = 20.dp, end = 18.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             HeroKicker(item)
@@ -958,32 +975,73 @@ fun HomeScreenWithSidebar(
         }
     }
 
-    // Always-visible glossy icon rail on the left + content filling the rest.
-    Row(
+    val goSection: (String) -> Unit = { key ->
+        if (key != selectedSection) focusMemory.pendingKey = TvFocusMemory.FIRST_ITEM
+        onSelectSection(key)
+    }
+    val goSearch: () -> Unit = {
+        focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
+        onOpenSearchScreen()
+    }
+    val goSettings: () -> Unit = {
+        focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
+        onOpenSettingsScreen()
+    }
+    // Phone keeps the rail hidden behind a menu button; TV shows it permanently.
+    var railOpen by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = !isTv && railOpen) { railOpen = false }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(t.background)
     ) {
-        SideRail(
-            selectedSection = selectedSection,
-            onSelectSection = { key ->
-                if (key != selectedSection) focusMemory.pendingKey = TvFocusMemory.FIRST_ITEM
-                onSelectSection(key)
-            },
-            onOpenSearch = {
-                focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
-                onOpenSearchScreen()
-            },
-            onOpenSettings = {
-                focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
-                onOpenSettingsScreen()
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (isTv) {
+                SideRail(
+                    selectedSection = selectedSection,
+                    onSelectSection = goSection,
+                    onOpenSearch = goSearch,
+                    onOpenSettings = goSettings
+                )
             }
-        )
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                if (!isTv) {
+                    // Slim top bar on phones: menu button + wordmark
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .clickable { railOpen = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Menu,
+                                contentDescription = "Menu",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Text("Stream", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
             if (isLoading) {
                 HomeLoadingSkeleton()
             } else {
@@ -1001,7 +1059,7 @@ fun HomeScreenWithSidebar(
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             modifier = Modifier
-                                .statusBarsPadding()
+                                .then(if (isTv) Modifier.statusBarsPadding() else Modifier)
                                 .padding(start = 14.dp, top = 10.dp, bottom = 2.dp)
                         )
                         if (watchLaterList.isEmpty()) {
@@ -1352,6 +1410,45 @@ fun HomeScreenWithSidebar(
                 }
                 }
             }
+                }
+            }
+        }
+
+        // Phone: dim scrim + slide-in rail drawer
+        if (!isTv) {
+            AnimatedVisibility(
+                visible = railOpen,
+                enter = fadeIn(tween(200)),
+                exit = fadeOut(tween(200))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xB3000000))
+                        .clickable { railOpen = false }
+                )
+            }
+            AnimatedVisibility(
+                visible = railOpen,
+                enter = slideInHorizontally(animationSpec = tween(260)) { -it } + fadeIn(tween(200)),
+                exit = slideOutHorizontally(animationSpec = tween(220)) { -it } + fadeOut(tween(180))
+            ) {
+                SideRail(
+                    selectedSection = selectedSection,
+                    onSelectSection = { key ->
+                        railOpen = false
+                        goSection(key)
+                    },
+                    onOpenSearch = {
+                        railOpen = false
+                        goSearch()
+                    },
+                    onOpenSettings = {
+                        railOpen = false
+                        goSettings()
+                    }
+                )
+            }
         }
     }
 }
@@ -1389,7 +1486,7 @@ fun SideRail(
         RailItem(Icons.Outlined.Home, "Home", selectedSection == "Home") { onSelectSection("Home") }
         RailItem(Icons.Outlined.Movie, "Movies", selectedSection == "Movies") { onSelectSection("Movies") }
         RailItem(Icons.Outlined.Tv, "TV Series", selectedSection == "Series") { onSelectSection("Series") }
-        RailItem(Icons.Outlined.AutoAwesome, "Anime", selectedSection == "Anime") { onSelectSection("Anime") }
+        RailItem(ToriiIcon, "Anime", selectedSection == "Anime") { onSelectSection("Anime") }
         RailItem(Icons.Outlined.BookmarkBorder, "Watch Later", selectedSection == "WatchLater") { onSelectSection("WatchLater") }
 
         Spacer(modifier = Modifier.weight(1f))
