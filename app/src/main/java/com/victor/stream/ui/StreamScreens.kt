@@ -696,8 +696,8 @@ private fun TvHeroPager(
                 .statusBarsPadding()
                 .padding(start = 18.dp, top = 186.dp)
                 .graphicsLayer {
+                    // Slide only — animating alpha here would clip the focus ring's corners
                     translationX = buttonSlide.value
-                    alpha = (1f - kotlin.math.abs(buttonSlide.value) / 320f).coerceIn(0.2f, 1f)
                 }
                 .then(
                     if (focusMemory != null) Modifier.tvRememberedFocus("hero", 0, true, focusMemory)
