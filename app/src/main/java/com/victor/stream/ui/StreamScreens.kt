@@ -48,6 +48,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
@@ -94,6 +97,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.net.Uri
 import coil.compose.AsyncImage
 import com.victor.stream.ui.theme.AppTheme
 import com.victor.stream.core.DebugCaptureCard
@@ -347,15 +352,32 @@ fun PosterCard(
     // NOTE: no separate .focusable() here. combinedClickable is already focusable;
     // an extra focusable() created two focus stops, so OK had to be pressed twice.
     val t = AppTheme.c
+    val isTv = rememberIsTv()
+    var isFocusedNow by remember { mutableStateOf(false) }
+    val pressInteraction = remember { MutableInteractionSource() }
+    val isPressed by pressInteraction.collectIsPressedAsState()
+    // Little "physical" bounce while a finger is down (phones only)
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed && !isTv) 0.94f else 1f,
+        animationSpec = tween(110),
+        label = "posterPress"
+    )
     Box(
         modifier = modifier
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
             .then(
                 if (focusKey != null) Modifier.tvRememberedFocus(focusKey, focusIndex, isFirstRow, focusMemory)
                 else Modifier
             )
+            .onFocusChanged { isFocusedNow = it.isFocused }
             .tvFocusHighlight(RoundedCornerShape(5.dp), focusedScale = 1.08f)
             .clip(RoundedCornerShape(5.dp))
             .combinedClickable(
+                interactionSource = pressInteraction,
+                indication = LocalIndication.current,
                 onClick = {
                     if (focusKey != null) focusMemory?.pendingKey = focusKey
                     onClick()
@@ -398,47 +420,173 @@ fun PosterCard(
                 .background(Color(0xB3000000))
                 .padding(horizontal = 5.dp, vertical = 2.dp)
         )
+        // On TV, show the title over the focused poster (posters carry no text otherwise)
+        if (isTv && isFocusedNow) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color(0xE6000000))
+                        )
+                    )
+            ) {
+                Text(
+                    text = item.title,
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 14.dp, bottom = 6.dp)
+                )
+            }
+        }
     }
 
     if (showWatchLaterPopup) {
-        AlertDialog(
-            onDismissRequest = { showWatchLaterPopup = false },
-            title = { Text(item.title) },
-            text = {
-                Text(
-                    if (isWatchLaterScreen) "Remove this item from Watch Later?"
-                    else "Add this item to your Watch Later list?"
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (isWatchLaterScreen) {
-                            ServiceLocator.prefsStore.removeFromWatchLater(item.id)
-                            scope.launch {
-                                ServiceLocator.catalogRepository.syncProgressToCloud(item, inWatchlist = false)
-                            }
-                        } else {
-                            ServiceLocator.prefsStore.addToWatchLater(item)
-                            scope.launch {
-                                ServiceLocator.catalogRepository.syncProgressToCloud(item, inWatchlist = true)
-                            }
-                        }
-                        showWatchLaterPopup = false
-                        onWatchLaterChanged()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
-                    modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp))
-                ) {
-                    Text(if (isWatchLaterScreen) "Remove" else "Watch Later", color = Color.White)
+        // Long-press quick preview: peek at a title without leaving the row
+        val t2 = AppTheme.c
+        Dialog(onDismissRequest = { showWatchLaterPopup = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(t2.surface)
+                    .border(1.dp, t2.glassBorder, RoundedCornerShape(18.dp))
+            ) {
+                Box {
+                    AsyncImage(
+                        model = item.backdropUrl.ifBlank { item.posterUrl },
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .background(Color(0xFF181818))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, t2.surface)
+                                )
+                            )
+                    )
+                    Text(
+                        text = item.badgeLabel,
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xB3000000))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
                 }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showWatchLaterPopup = false }, modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp))) {
-                    Text("Cancel", color = Color.White)
+                Column(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = item.title,
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = t2.accent,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = String.format("%.1f", item.rating) + "   •   " + item.releaseYear.take(4),
+                            color = t2.textSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    if (item.overview.isNotBlank()) {
+                        Text(
+                            text = item.overview,
+                            color = t2.textSecondary,
+                            fontSize = 12.sp,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.06f)
+                                .clip(RoundedCornerShape(50))
+                                .background(t2.accentGradient)
+                                .clickable {
+                                    showWatchLaterPopup = false
+                                    if (focusKey != null) focusMemory?.pendingKey = focusKey
+                                    onClick()
+                                }
+                                .padding(horizontal = 18.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                tint = t2.onAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text("Details", color = t2.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.06f)
+                                .clip(RoundedCornerShape(50))
+                                .background(t2.glass)
+                                .border(1.dp, t2.glassBorder, RoundedCornerShape(50))
+                                .clickable {
+                                    if (isWatchLaterScreen) {
+                                        ServiceLocator.prefsStore.removeFromWatchLater(item.id)
+                                        scope.launch {
+                                            ServiceLocator.catalogRepository.syncProgressToCloud(item, inWatchlist = false)
+                                        }
+                                    } else {
+                                        ServiceLocator.prefsStore.addToWatchLater(item)
+                                        scope.launch {
+                                            ServiceLocator.catalogRepository.syncProgressToCloud(item, inWatchlist = true)
+                                        }
+                                    }
+                                    showWatchLaterPopup = false
+                                    onWatchLaterChanged()
+                                }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = if (isWatchLaterScreen) "− Remove" else "+ Watch Later",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 }
 
@@ -624,6 +772,9 @@ private fun TvHeroPager(
     var heroDir by remember { mutableIntStateOf(1) }
     if (idx >= items.size) idx = 0
     val current = items[idx]
+    val heroResume = remember(current.id) {
+        ServiceLocator.prefsStore.getContinueWatching().firstOrNull { it.media.id == current.id }
+    }
 
     // The Details button is one static composable (so remote focus never
     // breaks), but it visually rides along with each page change.
@@ -738,7 +889,23 @@ private fun TvHeroPager(
                 tint = t.onAccent,
                 modifier = Modifier.size(18.dp)
             )
-            Text("Details", color = t.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = if (heroResume != null) "Resume" else "Details",
+                color = t.onAccent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+            val minsLeft = if (heroResume != null && heroResume.durationMs > 0L) {
+                ((heroResume.durationMs - heroResume.positionMs).coerceAtLeast(0L) / 60000L).toInt()
+            } else -1
+            if (minsLeft > 0) {
+                Text(
+                    text = "· $minsLeft min left",
+                    color = t.onAccent.copy(alpha = 0.8f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
 
         HeroDots(count = items.size, current = idx, modifier = Modifier.align(Alignment.BottomEnd))
@@ -785,6 +952,9 @@ private fun HeroSlide(
     modifier: Modifier = Modifier
 ) {
     val t = AppTheme.c
+    val slideResume = remember(item.id) {
+        ServiceLocator.prefsStore.getContinueWatching().firstOrNull { it.media.id == item.id }
+    }
     Box(modifier = modifier.height(340.dp)) {
         AsyncImage(
             model = item.backdropUrl.ifBlank { item.posterUrl },
@@ -829,7 +999,12 @@ private fun HeroSlide(
                     tint = t.onAccent,
                     modifier = Modifier.size(18.dp)
                 )
-                Text("Details", color = t.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (slideResume != null) "Resume" else "Details",
+                    color = t.onAccent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
@@ -940,6 +1115,63 @@ private fun HeroDots(count: Int, current: Int, modifier: Modifier = Modifier) {
     }
 }
 
+
+/** "Top 10" row with the big overlapping rank numbers. */
+@Composable
+fun Top10Row(
+    title: String,
+    items: List<MediaItemModel>,
+    onMediaClick: (MediaItemModel) -> Unit,
+    onWatchLaterChanged: () -> Unit,
+    focusMemory: TvFocusMemory? = null,
+    rowKey: String = "top10"
+) {
+    val top = items.take(10)
+    if (top.isEmpty()) return
+    val t = AppTheme.c
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            itemsIndexed(top) { index, item ->
+                Box(modifier = Modifier.width(164.dp).height(165.dp)) {
+                    Text(
+                        text = "${index + 1}",
+                        color = t.surfaceHigh,
+                        fontSize = if (index == 9) 88.sp else 120.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = (-8).sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.align(Alignment.BottomStart)
+                    )
+                    PosterCard(
+                        item = item,
+                        isWatchLaterScreen = false,
+                        onClick = { onMediaClick(item) },
+                        onWatchLaterChanged = onWatchLaterChanged,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(112.dp),
+                        focusKey = "$rowKey#${item.id}",
+                        focusIndex = index,
+                        isFirstRow = false,
+                        focusMemory = focusMemory
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ==========================================
 // 2. HOME SCREEN & SIDEBAR NAVIGATION
 // ==========================================
@@ -982,6 +1214,18 @@ fun HomeScreenWithSidebar(
         watchLaterList = ServiceLocator.prefsStore.getWatchLater()
         tmdbAuth = ServiceLocator.prefsStore.getTmdbAuth()
         aniAuth = ServiceLocator.prefsStore.getAniListAuth()
+    }
+
+    // "Because you watched X" — recommendations seeded from the newest
+    // Continue Watching title (pure TMDB metadata, fetched once per source).
+    var homeRecsFor by remember { mutableStateOf<MediaItemModel?>(null) }
+    var homeRecs by remember { mutableStateOf<List<MediaItemModel>>(emptyList()) }
+    LaunchedEffect(continueList.firstOrNull()?.media?.id) {
+        val seed = continueList.firstOrNull()?.media
+        if (seed != null && seed.id != homeRecsFor?.id) {
+            homeRecsFor = seed
+            homeRecs = runCatching { TmdbExtras.fetchRecommendations(seed) }.getOrDefault(emptyList())
+        }
     }
 
     // If the remembered poster isn't on screen any more, fall back to the first poster
@@ -1190,6 +1434,20 @@ fun HomeScreenWithSidebar(
                                             )
                                         }
                                     }
+                                    if (homeRecs.isNotEmpty()) {
+                                        item {
+                                            MediaCarouselRow(
+                                                focusMemory = focusMemory,
+                                                title = "Because you watched ${homeRecsFor?.title ?: ""}",
+                                                items = homeRecs,
+                                                showRankBadge = false,
+                                                onMediaClick = onMediaClick,
+                                                onWatchLaterChanged = {
+                                                    watchLaterList = ServiceLocator.prefsStore.getWatchLater()
+                                                }
+                                            )
+                                        }
+                                    }
                                     item {
                                         MediaCarouselRow(
                                             focusMemory = focusMemory,
@@ -1202,6 +1460,20 @@ fun HomeScreenWithSidebar(
                                                 watchLaterList = ServiceLocator.prefsStore.getWatchLater()
                                             }
                                         )
+                                    }
+                                    if (trendingAll.size >= 4) {
+                                        item {
+                                            Top10Row(
+                                                title = "Top 10 Today",
+                                                items = trendingAll,
+                                                onMediaClick = onMediaClick,
+                                                onWatchLaterChanged = {
+                                                    watchLaterList = ServiceLocator.prefsStore.getWatchLater()
+                                                },
+                                                focusMemory = focusMemory,
+                                                rowKey = "home-top10"
+                                            )
+                                        }
                                     }
                                     if (trendingAnime.isNotEmpty()) {
                                         item {
@@ -2066,18 +2338,59 @@ fun MediaDetailsScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(
-                        text = "${media.typeHeaderLabel} • ${media.releaseYear} • ★ ${String.format("%.1f", media.rating)}",
-                        color = AppTheme.c.accent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    // Same design language as the home hero: kicker, big title, TMDB pill
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(AppTheme.c.accentGradient)
+                        )
+                        Text(
+                            text = media.typeHeaderLabel,
+                            color = Color(0xFFDADADA),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 3.sp
+                        )
+                    }
                     Text(
                         text = media.title,
                         color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 24.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "TMDB",
+                            color = Color.Black,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color(0xFFF5C518))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                        Text(
+                            text = String.format("%.1f", media.rating) + "/10",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = media.releaseYear.take(4),
+                            color = AppTheme.c.accent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     if (!media.romajiTitle.isNullOrBlank() && media.romajiTitle != media.title) {
                         Text(
                             text = media.romajiTitle!!,
@@ -2094,6 +2407,36 @@ fun MediaDetailsScreen(
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    val trailerContext = LocalContext.current
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.06f)
+                            .clip(RoundedCornerShape(50))
+                            .background(AppTheme.c.glass)
+                            .border(1.dp, AppTheme.c.glassBorder, RoundedCornerShape(50))
+                            .clickable {
+                                scope.launch {
+                                    val key = runCatching { TmdbExtras.fetchTrailerKey(media) }.getOrNull()
+                                    if (key != null) {
+                                        runCatching {
+                                            trailerContext.startActivity(
+                                                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key"))
+                                            )
+                                        }
+                                    } else {
+                                        android.widget.Toast
+                                            .makeText(trailerContext, "No trailer found", android.widget.Toast.LENGTH_SHORT)
+                                            .show()
+                                    }
+                                }
+                            }
+                            .padding(horizontal = 14.dp, vertical = 7.dp)
+                    ) {
+                        Text("▶ Watch Trailer", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
 
                     if (!media.isSeries) {
                         Spacer(modifier = Modifier.height(4.dp))
@@ -2692,10 +3035,12 @@ fun SearchScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
 
+    val searchContext = LocalContext.current
     var queryInput by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<MediaItemModel>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     var hasSearched by remember { mutableStateOf(false) }
+    var recentSearches by remember { mutableStateOf(RecentSearchStore.get(searchContext)) }
 
     var selectedType by remember { mutableStateOf(initialType) }
     var selectedGenre by remember { mutableStateOf(initialGenre) }
@@ -2708,6 +3053,9 @@ fun SearchScreen(
     fun performSearch() {
         focusManager.clearFocus()
         keyboardController?.hide()
+        if (queryInput.isNotBlank()) {
+            recentSearches = RecentSearchStore.add(searchContext, queryInput)
+        }
         isSearching = true
         hasSearched = true
         scope.launch {
@@ -2841,12 +3189,59 @@ fun SearchScreen(
                 CircularProgressIndicator(color = AppTheme.c.accent)
             }
         } else if (!hasSearched) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "Search TMDB & Anime or filter by Type, Genre & Year.",
-                    color = Color.Gray,
-                    fontSize = 14.sp
-                )
+            if (recentSearches.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Search TMDB & Anime or filter by Type, Genre & Year.",
+                        color = Color.Gray,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Recent searches",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Clear",
+                            color = AppTheme.c.accent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .tvFocusHighlight(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { recentSearches = RecentSearchStore.clear(searchContext) }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(recentSearches) { recent ->
+                            Text(
+                                text = recent,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .tvFocusHighlight(RoundedCornerShape(50))
+                                    .clip(RoundedCornerShape(50))
+                                    .background(AppTheme.c.surfaceHigh)
+                                    .border(1.dp, AppTheme.c.glassBorder, RoundedCornerShape(50))
+                                    .clickable {
+                                        queryInput = recent
+                                        performSearch()
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
             }
         } else if (searchResults.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -3033,9 +3428,75 @@ fun SettingsScreen(
 
                 AccountsCard(onOpen = { accountPage = it })
 
+                WatchStatsCard()
+
                 DebugCaptureCard()
             }
         }
+    }
+}
+
+
+/** Little "your watching" stats card built from local lists only. */
+@Composable
+fun WatchStatsCard() {
+    val t = AppTheme.c
+    val continueEntries = remember { ServiceLocator.prefsStore.getContinueWatching() }
+    val watchLaterCount = remember { ServiceLocator.prefsStore.getWatchLater().size }
+    val watchedMinutes = remember(continueEntries) {
+        (continueEntries.sumOf { it.positionMs } / 60000L).toInt()
+    }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = t.surface),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, t.glassBorder, RoundedCornerShape(18.dp))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Your watching", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatTile(
+                    value = "${continueEntries.size}",
+                    label = "In progress",
+                    modifier = Modifier.weight(1f)
+                )
+                StatTile(
+                    value = "$watchLaterCount",
+                    label = "Watch Later",
+                    modifier = Modifier.weight(1f)
+                )
+                StatTile(
+                    value = if (watchedMinutes >= 60) "${watchedMinutes / 60}h ${watchedMinutes % 60}m" else "${watchedMinutes}m",
+                    label = "Watched*",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Text(
+                text = "*Time watched across titles currently in progress",
+                color = t.textFaint,
+                fontSize = 10.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
+    val t = AppTheme.c
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(t.surfaceHigh)
+            .padding(vertical = 12.dp)
+    ) {
+        Text(value, color = t.accent, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        Text(label, color = t.textSecondary, fontSize = 11.sp)
     }
 }
 

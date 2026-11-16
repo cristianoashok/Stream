@@ -14,7 +14,8 @@ private var toriiCache: ImageVector? = null
 
 val ToriiIcon: ImageVector
     get() {
-        toriiCache?.let { return it }
+        val cached = toriiCache
+        if (cached != null) return cached
         val built = buildTorii()
         toriiCache = built
         return built
