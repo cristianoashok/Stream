@@ -1379,6 +1379,8 @@ fun HomeScreenWithSidebar(
     // bottom. TV: permanent side rail. The header hides its logo row while you scroll
     // down and brings it back when you scroll up.
     var headerCollapsed by remember { mutableStateOf(false) }
+    var myListFilter by rememberSaveable { mutableStateOf("All") }
+    var myListHidden by remember { mutableStateOf(setOf<String>()) }
     LaunchedEffect(selectedSection) { headerCollapsed = false }
     val headerScroll = remember {
         object : NestedScrollConnection {
@@ -1424,41 +1426,73 @@ fun HomeScreenWithSidebar(
                 ) { section ->
                 when (section) {
                     "WatchLater" -> {
+                        // Merged list: Watch Later saved in the app + TMDB watchlist (movies & series)
+                        val keyOf: (MediaItemModel) -> String = { m ->
+                            (if (m.isSeries) "tv-" else "mv-") + (m.tmdbId ?: m.id)
+                        }
+                        val myListAll = (watchLaterList + tmdbWatchlistMovies + tmdbWatchlistSeries)
+                            .distinctBy(keyOf)
+                            .filter { keyOf(it) !in myListHidden }
+                        val myListShown = when (myListFilter) {
+                            "Movies" -> myListAll.filter { !it.isSeries }
+                            "Series" -> myListAll.filter { it.isSeries }
+                            else -> myListAll
+                        }
                         Column(modifier = Modifier.fillMaxSize()) {
-                        Text(
-                            text = "My List",
-                            color = t.textPrimary,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier
-                                .then(if (isTv) Modifier.statusBarsPadding() else Modifier)
-                                .padding(start = 16.dp, top = 10.dp + phoneTopInset, bottom = 2.dp)
-                        )
-                        if (watchLaterList.isEmpty()) {
+                        if (isTv) {
+                            // Phone shows the title + filter in the top header instead
+                            Text(
+                                text = "My List",
+                                color = t.textPrimary,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier
+                                    .statusBarsPadding()
+                                    .padding(start = 16.dp, top = 10.dp, bottom = 8.dp)
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(start = 16.dp)
+                            ) {
+                                MY_LIST_TABS.forEach { tab ->
+                                    FilterChipPill(text = tab, selected = myListFilter == tab, onClick = { myListFilter = tab })
+                                }
+                            }
+                        }
+                        if (myListShown.isEmpty()) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = "Your Watch Later list is empty.\nLong press any poster to add items here!",
+                                    text = when (myListFilter) {
+                                        "Movies" -> "No movies in your list yet."
+                                        "Series" -> "No series in your list yet."
+                                        else -> "Your list is empty.\nLong press any poster to add it here!"
+                                    },
                                     color = Color.Gray,
                                     fontSize = 14.sp
                                 )
                             }
                         } else {
                             LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 110.dp),
+                                columns = GridCells.Adaptive(minSize = 105.dp),
                                 contentPadding = PaddingValues(
-                                    start = 14.dp, end = 14.dp, top = 14.dp, bottom = phoneBottomInset
+                                    start = 14.dp,
+                                    end = 14.dp,
+                                    top = if (isTv) 14.dp else 10.dp + phoneTopInset,
+                                    bottom = phoneBottomInset
                                 ),
-                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                horizontalArrangement = Arrangement.spacedBy(9.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                gridItemsIndexed(watchLaterList) { index, item ->
+                                gridItemsIndexed(myListShown, key = { _, m -> keyOf(m) }) { index, item ->
                                     PosterCard(
                                         item = item,
                                         isWatchLaterScreen = true,
                                         onClick = { onMediaClick(item) },
                                         onWatchLaterChanged = {
+                                            // Removed (also from TMDB/AniList): hide it right away
                                             watchLaterList = ServiceLocator.prefsStore.getWatchLater()
+                                            myListHidden = myListHidden + keyOf(item)
                                         },
                                         focusKey = "watchLaterGrid#${item.id}",
                                         focusIndex = index,
@@ -1821,10 +1855,13 @@ fun HomeScreenWithSidebar(
         }
 
         if (!isTv) {
+            val onMyList = selectedSection == "WatchLater"
             PhoneTopHeader(
                 collapsed = headerCollapsed,
-                selectedSection = selectedSection,
-                onSelectSection = goSection,
+                title = if (onMyList) "My List" else "Stream",
+                tabs = if (onMyList) MY_LIST_TABS else listOf("Home", "Movies", "Series", "Anime"),
+                selectedTab = if (onMyList) myListFilter else selectedSection,
+                onSelectTab = { tab -> if (onMyList) myListFilter = tab else goSection(tab) },
                 modifier = Modifier.align(Alignment.TopCenter)
             )
             PhoneBottomNav(
@@ -1843,11 +1880,15 @@ fun HomeScreenWithSidebar(
 // PHONE SHELL — collapsing header + floating bottom nav
 // ==========================================
 
+val MY_LIST_TABS = listOf("All", "Movies", "Series")
+
 @Composable
 fun PhoneTopHeader(
     collapsed: Boolean,
-    selectedSection: String,
-    onSelectSection: (String) -> Unit,
+    title: String,
+    tabs: List<String>,
+    selectedTab: String,
+    onSelectTab: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val t = AppTheme.c
@@ -1888,7 +1929,7 @@ fun PhoneTopHeader(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Stream",
+                    text = title,
                     color = Color.White,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Black,
@@ -1896,21 +1937,23 @@ fun PhoneTopHeader(
                 )
             }
         }
-        // Tabs sit in a dark frosted capsule so they stay readable over any poster
+        // Tabs sit in a dark frosted capsule so they stay readable over any poster.
+        // Equal-width tabs that always fit the screen (no sideways scrolling).
         Row(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .padding(horizontal = 14.dp, vertical = 8.dp)
+                .fillMaxWidth()
                 .clip(RoundedCornerShape(50))
                 .background(Color(0x8C000000))
                 .border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(50))
-                .horizontalScroll(rememberScrollState())
-                .padding(4.dp)
+                .padding(3.dp)
         ) {
-            listOf("Home" to "Home", "Movies" to "Movies", "Series" to "Series", "Anime" to "Anime")
-                .forEach { (key, label) ->
-                    val selected = key == selectedSection
+            tabs
+                .forEach { key ->
+                    val label = key
+                    val selected = key == selectedTab
                     val pill by animateColorAsState(
                         targetValue = if (selected) Color.White else Color.Transparent,
                         animationSpec = tween(220),
@@ -1924,13 +1967,16 @@ fun PhoneTopHeader(
                     Text(
                         text = label,
                         color = txt,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 1,
                         modifier = Modifier
+                            .weight(1f)
                             .clip(RoundedCornerShape(50))
                             .background(pill)
-                            .clickable { onSelectSection(key) }
-                            .padding(horizontal = 16.dp, vertical = 7.dp)
+                            .clickable { onSelectTab(key) }
+                            .padding(vertical = 7.dp)
                     )
                 }
         }

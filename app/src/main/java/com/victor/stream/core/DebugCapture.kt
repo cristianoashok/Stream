@@ -210,11 +210,6 @@ fun DebugCaptureCard() {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Debug Capture", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Off by default. Turn on only when you need to capture a problem — records what the app does (screens, play attempts, each server, errors).",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
                 }
                 Switch(
                     checked = captureOn,

@@ -73,7 +73,6 @@ import kotlinx.coroutines.isActive
 /** Two gently auto-scrolling rows of picture tiles: studios, then streaming services. */
 @Composable
 fun BrandRows(onOpenBrand: (Brand) -> Unit) {
-    val isTv = rememberIsTv()
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = "Studios & Streaming",
@@ -82,9 +81,9 @@ fun BrandRows(onOpenBrand: (Brand) -> Unit) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 18.dp)
         )
-        // On TV the remote moves through the tiles, so no auto-scroll there
-        BrandMarqueeRow(brands = Brands.studios, driftRight = true, autoScroll = !isTv, onOpenBrand = onOpenBrand)
-        BrandMarqueeRow(brands = Brands.providers, driftRight = false, autoScroll = !isTv, onOpenBrand = onOpenBrand)
+        // Plain swipeable rows (auto-scrolling turned off)
+        BrandMarqueeRow(brands = Brands.studios, driftRight = true, autoScroll = false, onOpenBrand = onOpenBrand)
+        BrandMarqueeRow(brands = Brands.providers, driftRight = false, autoScroll = false, onOpenBrand = onOpenBrand)
     }
 }
 

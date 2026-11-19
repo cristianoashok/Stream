@@ -1098,6 +1098,36 @@ class CatalogRepository(
                 if (!aniAuth.token.isNullOrBlank()) {
                     val bridged = idBridge.resolveIds(media, 1)
                     val aniId = bridged.anilistId ?: media.anilistId ?: return@withContext
+                    if (!inWatchlist && watchedEpisode == null) {
+                        // Removed from Watch Later: delete the AniList entry, but only if it is
+                        // still just "Planning" (never wipe real watching/completed progress).
+                        val lookup = JsonObject().apply {
+                            addProperty(
+                                "query",
+                                "query (${'$'}id: Int) { Media(id: ${'$'}id) { mediaListEntry { id status } } }"
+                            )
+                            add("variables", JsonObject().apply { addProperty("id", aniId) })
+                        }
+                        val entry = NetworkApis.aniList.postGraphQl("Bearer ${aniAuth.token}", lookup)
+                            .getAsJsonObject("data")
+                            ?.getAsJsonObject("Media")
+                            ?.get("mediaListEntry")
+                            ?.takeIf { it.isJsonObject }
+                            ?.asJsonObject
+                        val entryId = entry?.get("id")?.asInt
+                        val entryStatus = entry?.get("status")?.asString
+                        if (entryId != null && entryStatus == "PLANNING") {
+                            val delete = JsonObject().apply {
+                                addProperty(
+                                    "query",
+                                    "mutation (${'$'}id: Int) { DeleteMediaListEntry(id: ${'$'}id) { deleted } }"
+                                )
+                                add("variables", JsonObject().apply { addProperty("id", entryId) })
+                            }
+                            NetworkApis.aniList.postGraphQl("Bearer ${aniAuth.token}", delete)
+                        }
+                        return@withContext
+                    }
                     val status = if (watchedEpisode != null && watchedEpisode > 0) "CURRENT" else "PLANNING"
                     val mutation = """
                         mutation (${'$'}mediaId: Int, ${'$'}status: MediaListStatus, ${'$'}progress: Int) {
