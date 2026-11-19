@@ -1,5 +1,6 @@
 package com.victor.stream.player
 
+import com.victor.stream.core.Logger
 import com.victor.stream.domain.SubtitleTrack
 import java.net.HttpURLConnection
 import java.net.URL
@@ -18,7 +19,13 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object SubtitleVerifier {
 
-    data class Verdict(val valid: Boolean, val language: String?, val label: String?)
+    data class Verdict(
+        val valid: Boolean,
+        val language: String?,
+        val label: String?,
+        /** True when the file couldn't be downloaded to check (blocked, timed out...). */
+        val unreadable: Boolean = false
+    )
 
     private val verdicts = ConcurrentHashMap<String, Verdict>()
 
@@ -26,6 +33,13 @@ object SubtitleVerifier {
 
     /** True only when the file was downloaded and its text is actually English. */
     fun isConfirmedEnglish(url: String): Boolean = verdicts[url]?.let { it.valid && it.language == "en" } == true
+
+    /**
+     * Fallback: the file couldn't be downloaded to check, but its link clearly says
+     * English (e.g. ".../eng.vtt"). Better to show it than to show nothing.
+     */
+    fun isUnreadableButNamedEnglish(track: SubtitleTrack): Boolean =
+        verdicts[track.url]?.unreadable == true && track.language.equals("en", ignoreCase = true)
 
     /** Relabels tracks we've checked and removes ones that aren't real subtitles. */
     fun apply(tracks: List<SubtitleTrack>): List<SubtitleTrack> = tracks.mapNotNull { track ->
@@ -52,10 +66,14 @@ object SubtitleVerifier {
             if (headers.keys.none { it.equals("User-Agent", true) }) {
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) Chrome/131.0.0.0 Mobile Safari/537.36")
             }
-            if (conn.responseCode !in 200..299) {
+            val code = conn.responseCode
+            if (code !in 200..299) {
                 // Couldn't read it: keep the track as-is rather than hide it
                 conn.disconnect()
-                return Verdict(valid = true, language = null, label = null)
+                Logger.w("Subtitles", "Couldn't check ${shortName(track.url)} (HTTP $code)")
+                val v = Verdict(valid = true, language = null, label = null, unreadable = true)
+                verdicts[track.url] = v
+                return v
             }
             val bytes = conn.inputStream.use { input ->
                 val buf = java.io.ByteArrayOutputStream()
@@ -69,11 +87,25 @@ object SubtitleVerifier {
             }
             conn.disconnect()
             analyze(String(bytes, Charsets.UTF_8))
-        } catch (_: Exception) {
-            Verdict(valid = true, language = null, label = null)
+        } catch (e: Exception) {
+            Logger.w("Subtitles", "Couldn't check ${shortName(track.url)} (${e.javaClass.simpleName})")
+            Verdict(valid = true, language = null, label = null, unreadable = true)
         }
         verdicts[track.url] = verdict
+        if (!verdict.unreadable) {
+            Logger.i(
+                "Subtitles",
+                "Checked ${shortName(track.url)}: " +
+                    (if (verdict.valid) "subtitle, language=${verdict.language ?: "unknown"}" else "NOT a subtitle (skipped)")
+            )
+        }
         return verdict
+    }
+
+    private fun shortName(url: String): String {
+        val noQuery = url.substringBefore('?')
+        val host = runCatching { URL(url).host }.getOrDefault("")
+        return host + "/…/" + noQuery.substringAfterLast('/').take(40)
     }
 
     // ------------------------------------------------------------ analysis

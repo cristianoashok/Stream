@@ -211,7 +211,9 @@ class PlaybackController(
         // Only trust tracks whose content was checked (SubtitleVerifier) or that come from
         // the subtitle API - page-scraped links are often other languages or thumbnails.
         val enIdx = list.indexOfFirst {
-            SubtitleVerifier.isConfirmedEnglish(it.url) || (isEnglish(it) && it.url.contains("wyzie", ignoreCase = true))
+            SubtitleVerifier.isConfirmedEnglish(it.url) ||
+                (isEnglish(it) && it.url.contains("wyzie", ignoreCase = true)) ||
+                SubtitleVerifier.isUnreadableButNamedEnglish(it)
         }
         return if (enIdx >= 0) enIdx to list[enIdx] else -1 to null
     }

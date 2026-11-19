@@ -1172,15 +1172,18 @@ class CatalogRepository(
         val s = (episode?.seasonNumber ?: 1).coerceAtLeast(1)
         val e = (episode?.episodeNumber ?: 1).coerceAtLeast(1)
 
+        // Wyzie requires an API key on every request (from local.properties -> BuildConfig)
+        val wyzieKey = BuildConfig.WYZIE_API_KEY
+        val keyParam = if (wyzieKey.isNotBlank()) "&key=" + java.net.URLEncoder.encode(wyzieKey, "UTF-8") else ""
         val endpoints = if (media.isSeries) {
             listOf(
-                "https://sub.wyzie.ru/search?id=$cleanTmdbId&season=$s&episode=$e",
-                "https://sub.wyzie.ru/search?id=$cleanTmdbId&season=$s&episode=$e&source=all"
+                "https://sub.wyzie.ru/search?id=$cleanTmdbId&season=$s&episode=$e$keyParam",
+                "https://sub.wyzie.ru/search?id=$cleanTmdbId&season=$s&episode=$e&source=all$keyParam"
             )
         } else {
             listOf(
-                "https://sub.wyzie.ru/search?id=$cleanTmdbId",
-                "https://sub.wyzie.ru/search?id=$cleanTmdbId&source=all"
+                "https://sub.wyzie.ru/search?id=$cleanTmdbId$keyParam",
+                "https://sub.wyzie.ru/search?id=$cleanTmdbId&source=all$keyParam"
             )
         }
 
@@ -1194,8 +1197,15 @@ class CatalogRepository(
                     setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36")
                     setRequestProperty("Accept", "application/json, text/plain, */*")
                 }
-                if (conn.responseCode in 200..299) {
+                val wyzieCode = conn.responseCode
+                if (wyzieCode !in 200..299) {
+                    Logger.w("Subtitles", "Wyzie HTTP $wyzieCode (key set: ${wyzieKey.isNotBlank()})")
+                }
+                if (wyzieCode in 200..299) {
                     val body = conn.inputStream.bufferedReader().use { it.readText() }.trim()
+                    if (!body.startsWith("[")) {
+                        Logger.w("Subtitles", "Wyzie returned no list (key set: ${wyzieKey.isNotBlank()}): ${body.take(120)}")
+                    }
                     if (body.startsWith("[")) {
                         val arr = JSONArray(body)
                         val seenCounts = mutableMapOf<String, Int>()
@@ -1216,6 +1226,7 @@ class CatalogRepository(
                 }
             } catch (_: Exception) {}
         }
+        Logger.i("Subtitles", "Wyzie found ${tracks.size} subtitle(s) for ${media.title}")
         tracks.sortedWith(compareByDescending<SubtitleTrack> { it.language.startsWith("en") }.thenBy { it.label })
     }
 
