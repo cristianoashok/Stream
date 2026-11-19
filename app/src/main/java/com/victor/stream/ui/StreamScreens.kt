@@ -32,6 +32,23 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
@@ -181,27 +198,28 @@ fun ContinueWatchingRow(
 ) {
     var showPopupFor by remember { mutableStateOf<WatchProgressEntry?>(null) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val cwIsTv = rememberIsTv()
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = "Continue Watching",
             color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 18.dp)
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
+            contentPadding = PaddingValues(horizontal = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             itemsIndexed(continueList) { index, entry ->
                 val itemKey = "$rowKey#${entry.media.id}"
                 val t = AppTheme.c
                 Box(
                     modifier = Modifier
-                        .width(112.dp)
+                        .width(if (cwIsTv) 112.dp else 128.dp)
                         .tvRememberedFocus(itemKey, index, isFirstRow, focusMemory)
-                        .tvFocusHighlight(RoundedCornerShape(5.dp), focusedScale = 1.08f)
-                        .clip(RoundedCornerShape(5.dp))
+                        .tvFocusHighlight(RoundedCornerShape(8.dp), focusedScale = 1.08f)
+                        .clip(RoundedCornerShape(8.dp))
                         .combinedClickable(
                             onClick = {
                                 focusMemory?.pendingKey = itemKey
@@ -216,7 +234,7 @@ fun ContinueWatchingRow(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(165.dp)
+                            .aspectRatio(2f / 3f)
                             .background(Color(0xFF181818))
                     )
                     if (entry.seasonNumber != null && entry.episodeNumber != null) {
@@ -302,17 +320,18 @@ fun MediaCarouselRow(
     isFirstRow: Boolean = false,
     focusMemory: TvFocusMemory? = null
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val rowIsTv = rememberIsTv()
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = title,
             color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 18.dp)
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
+            contentPadding = PaddingValues(horizontal = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             itemsIndexed(items) { index, item ->
                 PosterCard(
@@ -321,7 +340,7 @@ fun MediaCarouselRow(
                     isWatchLaterScreen = false,
                     onClick = { onMediaClick(item) },
                     onWatchLaterChanged = onWatchLaterChanged,
-                    modifier = Modifier.width(112.dp),
+                    modifier = Modifier.width(if (rowIsTv) 112.dp else 128.dp),
                     focusKey = "$title#${item.id}",
                     focusIndex = index,
                     isFirstRow = isFirstRow,
@@ -373,8 +392,8 @@ fun PosterCard(
                 else Modifier
             )
             .onFocusChanged { isFocusedNow = it.isFocused }
-            .tvFocusHighlight(RoundedCornerShape(5.dp), focusedScale = 1.08f)
-            .clip(RoundedCornerShape(5.dp))
+            .tvFocusHighlight(RoundedCornerShape(8.dp), focusedScale = 1.08f)
+            .clip(RoundedCornerShape(8.dp))
             .combinedClickable(
                 interactionSource = pressInteraction,
                 indication = LocalIndication.current,
@@ -391,7 +410,7 @@ fun PosterCard(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(165.dp)
+                .aspectRatio(2f / 3f)
                 .background(Color(0xFF181818))
         )
         if (rankNumber != null) {
@@ -912,11 +931,12 @@ private fun TvHeroPager(
     }
 }
 
-/** Phone hero: swipeable pages with auto-advance. */
+/** Phone hero: tall swipeable poster pages with auto-advance. */
 @Composable
 private fun PhoneHeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemModel) -> Unit) {
     val listState = rememberLazyListState()
     val fling = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(lazyListState = listState)
+    val heroHeight = (LocalConfiguration.current.screenHeightDp * 0.74f).dp
 
     if (items.size > 1) {
         LaunchedEffect(items.size) {
@@ -930,21 +950,46 @@ private fun PhoneHeroCarousel(items: List<MediaItemModel>, onPlay: (MediaItemMod
         }
     }
 
-    Box {
+    Box(modifier = Modifier.height(heroHeight)) {
         LazyRow(state = listState, flingBehavior = fling) {
             items(items) { item ->
-                HeroSlide(item = item, onPlay = onPlay, modifier = Modifier.fillParentMaxWidth())
+                HeroSlide(
+                    item = item,
+                    onPlay = onPlay,
+                    modifier = Modifier
+                        .fillParentMaxWidth()
+                        .fillMaxHeight()
+                )
             }
         }
-        HeroDots(
-            count = items.size,
-            current = listState.firstVisibleItemIndex,
-            modifier = Modifier.align(Alignment.BottomEnd)
-        )
+        // Small centered page dots just above the meta line
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 116.dp)
+        ) {
+            val current = listState.firstVisibleItemIndex
+            repeat(items.size) { index ->
+                val w by animateDpAsState(
+                    targetValue = if (index == current) 14.dp else 4.dp,
+                    animationSpec = tween(300),
+                    label = "phoneDot"
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 2.5.dp)
+                        .height(4.dp)
+                        .width(w)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (index == current) Color.White else Color(0x73FFFFFF))
+                )
+            }
+        }
     }
 }
 
-/** One full-width hero page (phone). */
+/** One tall hero page (phone): poster art, centered meta and My List · Play · Info. */
 @Composable
 private fun HeroSlide(
     item: MediaItemModel,
@@ -952,61 +997,124 @@ private fun HeroSlide(
     modifier: Modifier = Modifier
 ) {
     val t = AppTheme.c
+    val scope = rememberCoroutineScope()
     val slideResume = remember(item.id) {
         ServiceLocator.prefsStore.getContinueWatching().firstOrNull { it.media.id == item.id }
     }
-    Box(modifier = modifier.height(340.dp)) {
+    var inList by remember(item.id) {
+        mutableStateOf(ServiceLocator.prefsStore.getWatchLater().any { it.id == item.id })
+    }
+    Box(modifier = modifier) {
         AsyncImage(
-            model = item.backdropUrl.ifBlank { item.posterUrl },
+            model = item.posterUrl.ifBlank { item.backdropUrl },
             contentDescription = item.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF181818))
         )
-        HeroScrims()
-        Column(
+        // Dark top (under the header) and a long fade into the page at the bottom
+        Box(
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 18.dp, top = 20.dp, end = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp)
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color(0x99000000),
+                        0.22f to Color.Transparent,
+                        0.55f to Color.Transparent,
+                        0.82f to t.background.copy(alpha = 0.85f),
+                        1f to t.background
+                    )
+                )
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
         ) {
-            HeroKicker(item)
+            val kind = when {
+                item.isAnime -> "Anime"
+                item.isSeries -> "Series"
+                else -> "Movie"
+            }
             Text(
-                text = item.title,
-                color = Color.White,
-                fontSize = 34.sp,
-                lineHeight = 38.sp,
-                fontWeight = FontWeight.Black,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(0.72f)
+                text = listOf(item.releaseYear.take(4), kind, "\u2605 " + String.format("%.1f", item.rating))
+                    .filter { it.isNotBlank() }
+                    .joinToString("   \u2022   "),
+                color = Color(0xE6FFFFFF),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
             )
-            HeroMetaRow(item)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(t.accentGradient)
-                    .clickable { onPlay(item) }
-                    .padding(horizontal = 22.dp, vertical = 9.dp)
+                horizontalArrangement = Arrangement.spacedBy(26.dp),
+                modifier = Modifier.padding(top = 16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = t.onAccent,
-                    modifier = Modifier.size(18.dp)
+                HeroSideAction(
+                    icon = if (inList) Icons.Filled.Check else Icons.Filled.Add,
+                    label = "My List",
+                    onClick = {
+                        if (inList) {
+                            ServiceLocator.prefsStore.removeFromWatchLater(item.id)
+                            scope.launch { ServiceLocator.catalogRepository.syncProgressToCloud(item, inWatchlist = false) }
+                        } else {
+                            ServiceLocator.prefsStore.addToWatchLater(item)
+                            scope.launch { ServiceLocator.catalogRepository.syncProgressToCloud(item, inWatchlist = true) }
+                        }
+                        inList = !inList
+                    }
                 )
-                Text(
-                    text = if (slideResume != null) "Resume" else "Details",
-                    color = t.onAccent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White)
+                        .clickable { onPlay(item) }
+                        .padding(horizontal = 44.dp, vertical = 11.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = if (slideResume != null) "Resume" else "Play",
+                        color = Color.Black,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                HeroSideAction(
+                    icon = Icons.Outlined.Info,
+                    label = "Info",
+                    onClick = { onPlay(item) }
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HeroSideAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp)
+    ) {
+        Crossfade(targetState = icon, animationSpec = tween(200), label = "heroActionIcon") { ic ->
+            Icon(imageVector = ic, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+        Text(text = label, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
@@ -1116,7 +1224,7 @@ private fun HeroDots(count: Int, current: Int, modifier: Modifier = Modifier) {
 }
 
 
-/** "Top 10" row with the big overlapping rank numbers. */
+/** "Top 10" row: big outlined rank numbers with the poster tucked over them. */
 @Composable
 fun Top10Row(
     title: String,
@@ -1124,34 +1232,51 @@ fun Top10Row(
     onMediaClick: (MediaItemModel) -> Unit,
     onWatchLaterChanged: () -> Unit,
     focusMemory: TvFocusMemory? = null,
-    rowKey: String = "top10"
+    rowKey: String = "top10",
+    isFirstRow: Boolean = false
 ) {
     val top = items.take(10)
     if (top.isEmpty()) return
-    val t = AppTheme.c
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val isTv = rememberIsTv()
+    val posterW = if (isTv) 112.dp else 118.dp
+    val posterH = posterW * 1.5f
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = title,
             color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 18.dp)
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             itemsIndexed(top) { index, item ->
-                Box(modifier = Modifier.width(164.dp).height(165.dp)) {
+                val num = "${index + 1}"
+                Box(
+                    modifier = Modifier
+                        .width(posterW + if (index == 9) 92.dp else 66.dp)
+                        .height(posterH + 6.dp)
+                ) {
+                    // Outlined number (stroke only), like the reference design
                     Text(
-                        text = "${index + 1}",
-                        color = t.surfaceHigh,
-                        fontSize = if (index == 9) 88.sp else 120.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = (-8).sp,
+                        text = num,
+                        style = TextStyle(
+                            color = Color(0xFF8C8C8C),
+                            fontSize = 150.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = (-10).sp,
+                            drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(
+                                width = 5f,
+                                join = androidx.compose.ui.graphics.StrokeJoin.Round
+                            )
+                        ),
                         maxLines = 1,
                         softWrap = false,
-                        modifier = Modifier.align(Alignment.BottomStart)
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .offset(y = 6.dp)
                     )
                     PosterCard(
                         item = item,
@@ -1160,10 +1285,10 @@ fun Top10Row(
                         onWatchLaterChanged = onWatchLaterChanged,
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .width(112.dp),
+                            .width(posterW),
                         focusKey = "$rowKey#${item.id}",
                         focusIndex = index,
-                        isFirstRow = false,
+                        isFirstRow = isFirstRow,
                         focusMemory = focusMemory
                     )
                 }
@@ -1249,9 +1374,24 @@ fun HomeScreenWithSidebar(
         focusMemory.pendingKey = focusMemory.lastFocusedKey ?: TvFocusMemory.FIRST_ITEM
         onOpenSettingsScreen()
     }
-    // Phone keeps the rail hidden behind a menu button; TV shows it permanently.
-    var railOpen by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = !isTv && railOpen) { railOpen = false }
+    // Phone: collapsing header (logo + section tabs) on top, floating nav bar at the
+    // bottom. TV: permanent side rail. The header hides its logo row while you scroll
+    // down and brings it back when you scroll up.
+    var headerCollapsed by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedSection) { headerCollapsed = false }
+    val headerScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < -6f) headerCollapsed = true
+                else if (available.y > 6f) headerCollapsed = false
+                return Offset.Zero
+            }
+        }
+    }
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Space the scrolling content leaves for the phone header / bottom bar
+    val phoneTopInset: Dp = if (isTv) 0.dp else statusTop + 104.dp
+    val phoneBottomInset: Dp = if (isTv) 16.dp else 100.dp
 
     Box(
         modifier = Modifier
@@ -1267,42 +1407,11 @@ fun HomeScreenWithSidebar(
                     onOpenSettings = goSettings
                 )
             }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            ) {
-                if (!isTv) {
-                    // Slim top bar on phones: menu button + wordmark
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .clickable { railOpen = true }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Menu,
-                                contentDescription = "Menu",
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        Text("Stream", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                    }
-                }
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .then(if (!isTv) Modifier.nestedScroll(headerScroll) else Modifier)
                 ) {
             if (isLoading) {
                 HomeLoadingSkeleton()
@@ -1316,13 +1425,13 @@ fun HomeScreenWithSidebar(
                     "WatchLater" -> {
                         Column(modifier = Modifier.fillMaxSize()) {
                         Text(
-                            text = "Watch Later",
+                            text = "My List",
                             color = t.textPrimary,
-                            fontSize = 20.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.ExtraBold,
                             modifier = Modifier
                                 .then(if (isTv) Modifier.statusBarsPadding() else Modifier)
-                                .padding(start = 14.dp, top = 10.dp, bottom = 2.dp)
+                                .padding(start = 16.dp, top = 10.dp + phoneTopInset, bottom = 2.dp)
                         )
                         if (watchLaterList.isEmpty()) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1335,7 +1444,9 @@ fun HomeScreenWithSidebar(
                         } else {
                             LazyVerticalGrid(
                                 columns = GridCells.Adaptive(minSize = 110.dp),
-                                contentPadding = PaddingValues(14.dp),
+                                contentPadding = PaddingValues(
+                                    start = 14.dp, end = 14.dp, top = 14.dp, bottom = phoneBottomInset
+                                ),
                                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxSize()
@@ -1361,6 +1472,8 @@ fun HomeScreenWithSidebar(
 
                     "Anime" -> {
                         AnimeCatalogSection(
+                            topInset = phoneTopInset,
+                            bottomInset = phoneBottomInset,
                             focusMemory = focusMemory,
                             trendingAnime = trendingAnime,
                             popularAnime = popularAnime,
@@ -1377,8 +1490,8 @@ fun HomeScreenWithSidebar(
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
-                                top = if (section == "Home") 0.dp else 12.dp,
-                                bottom = 16.dp
+                                top = if (section == "Home") 0.dp else 12.dp + phoneTopInset,
+                                bottom = phoneBottomInset
                             ),
                             verticalArrangement = Arrangement.spacedBy(18.dp)
                         ) {
@@ -1555,16 +1668,16 @@ fun HomeScreenWithSidebar(
                                         }
                                     }
                                     item {
-                                        MediaCarouselRow(
-                                            focusMemory = focusMemory,
+                                        Top10Row(
                                             title = "Top 10 Movies Today",
-                                            isFirstRow = moviesFirst == "top10",
-                                            items = trendingMovies.take(10),
-                                            showRankBadge = true,
+                                            items = trendingMovies,
                                             onMediaClick = onMediaClick,
                                             onWatchLaterChanged = {
                                                 watchLaterList = ServiceLocator.prefsStore.getWatchLater()
-                                            }
+                                            },
+                                            focusMemory = focusMemory,
+                                            rowKey = "movies-top10",
+                                            isFirstRow = moviesFirst == "top10"
                                         )
                                     }
                                     item {
@@ -1645,16 +1758,16 @@ fun HomeScreenWithSidebar(
                                         }
                                     }
                                     item {
-                                        MediaCarouselRow(
-                                            focusMemory = focusMemory,
+                                        Top10Row(
                                             title = "Top 10 TV Series Today",
-                                            isFirstRow = seriesFirst == "top10",
-                                            items = trendingSeries.take(10),
-                                            showRankBadge = true,
+                                            items = trendingSeries,
                                             onMediaClick = onMediaClick,
                                             onWatchLaterChanged = {
                                                 watchLaterList = ServiceLocator.prefsStore.getWatchLater()
-                                            }
+                                            },
+                                            focusMemory = focusMemory,
+                                            rowKey = "series-top10",
+                                            isFirstRow = seriesFirst == "top10"
                                         )
                                     }
                                     item {
@@ -1701,45 +1814,187 @@ fun HomeScreenWithSidebar(
                 }
             }
                 }
-            }
         }
 
-        // Phone: dim scrim + slide-in rail drawer
         if (!isTv) {
-            AnimatedVisibility(
-                visible = railOpen,
-                enter = fadeIn(tween(200)),
-                exit = fadeOut(tween(200))
+            PhoneTopHeader(
+                collapsed = headerCollapsed,
+                selectedSection = selectedSection,
+                onSelectSection = goSection,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+            PhoneBottomNav(
+                selectedSection = selectedSection,
+                onHome = { goSection("Home") },
+                onSearch = goSearch,
+                onMyList = { goSection("WatchLater") },
+                onSettings = goSettings,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+    }
+}
+
+// ==========================================
+// PHONE SHELL — collapsing header + floating bottom nav
+// ==========================================
+
+@Composable
+fun PhoneTopHeader(
+    collapsed: Boolean,
+    selectedSection: String,
+    onSelectSection: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val t = AppTheme.c
+    // Fully solid once collapsed, a soft fade over the hero otherwise
+    val solid by animateFloatAsState(
+        targetValue = if (collapsed) 0.94f else 0f,
+        animationSpec = tween(250),
+        label = "headerSolid"
+    )
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xCC000000), Color(0x80000000), Color.Transparent)
+                )
+            )
+            .background(t.background.copy(alpha = solid))
+            .statusBarsPadding()
+    ) {
+        AnimatedVisibility(
+            visible = !collapsed,
+            enter = expandVertically(tween(250)) + fadeIn(tween(250)),
+            exit = shrinkVertically(tween(220)) + fadeOut(tween(160))
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 4.dp)
             ) {
+                // Wordmark: small red play mark + "Stream"
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xB3000000))
-                        .clickable { railOpen = false }
+                        .size(width = 9.dp, height = 22.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(t.accentGradient)
                 )
-            }
-            AnimatedVisibility(
-                visible = railOpen,
-                enter = slideInHorizontally(animationSpec = tween(260)) { -it } + fadeIn(tween(200)),
-                exit = slideOutHorizontally(animationSpec = tween(220)) { -it } + fadeOut(tween(180))
-            ) {
-                SideRail(
-                    selectedSection = selectedSection,
-                    onSelectSection = { key ->
-                        railOpen = false
-                        goSection(key)
-                    },
-                    onOpenSearch = {
-                        railOpen = false
-                        goSearch()
-                    },
-                    onOpenSettings = {
-                        railOpen = false
-                        goSettings()
-                    }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Stream",
+                    color = Color.White,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.5).sp
                 )
             }
         }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            listOf("Home" to "Home", "Movies" to "Movies", "Series" to "Series", "Anime" to "Anime")
+                .forEach { (key, label) ->
+                    val selected = key == selectedSection
+                    val pill by animateColorAsState(
+                        targetValue = if (selected) Color(0x38FFFFFF) else Color.Transparent,
+                        animationSpec = tween(220),
+                        label = "tabPill"
+                    )
+                    val txt by animateColorAsState(
+                        targetValue = if (selected) Color.White else Color(0xFFA3A3A3),
+                        animationSpec = tween(220),
+                        label = "tabText"
+                    )
+                    Text(
+                        text = label,
+                        color = txt,
+                        fontSize = 15.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(pill)
+                            .clickable { onSelectSection(key) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+        }
+    }
+}
+
+@Composable
+fun PhoneBottomNav(
+    selectedSection: String,
+    onHome: () -> Unit,
+    onSearch: () -> Unit,
+    onMyList: () -> Unit,
+    onSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val onHomeTabs = selectedSection in listOf("Home", "Movies", "Series", "Anime")
+    Row(
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .navigationBarsPadding()
+            .padding(start = 18.dp, end = 18.dp, bottom = 10.dp)
+            .fillMaxWidth()
+            .height(64.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xEB1C1C1E))
+            .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(50))
+            .padding(horizontal = 6.dp)
+    ) {
+        BottomNavItem(Icons.Outlined.Home, "Home", onHomeTabs, onHome, Modifier.weight(1f))
+        BottomNavItem(Icons.Outlined.Search, "Search", false, onSearch, Modifier.weight(1f))
+        BottomNavItem(Icons.Outlined.BookmarkBorder, "My List", selectedSection == "WatchLater", onMyList, Modifier.weight(1f))
+        BottomNavItem(Icons.Outlined.Settings, "Settings", false, onSettings, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun BottomNavItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bg by animateColorAsState(
+        targetValue = if (selected) Color(0x2EFFFFFF) else Color.Transparent,
+        animationSpec = tween(220),
+        label = "navBg"
+    )
+    val tint by animateColorAsState(
+        targetValue = if (selected) Color.White else Color(0xFF9A9A9A),
+        animationSpec = tween(220),
+        label = "navTint"
+    )
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .padding(vertical = 6.dp)
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .clickable(onClick = onClick)
+    ) {
+        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+        Text(
+            text = label,
+            color = tint,
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1
+        )
     }
 }
 
@@ -1831,6 +2086,8 @@ private fun RailItem(
 
 @Composable
 fun AnimeCatalogSection(
+    topInset: Dp = 0.dp,
+    bottomInset: Dp = 16.dp,
     focusMemory: TvFocusMemory? = null,
     trendingAnime: List<MediaItemModel>,
     popularAnime: List<MediaItemModel>,
@@ -1893,7 +2150,7 @@ fun AnimeCatalogSection(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 12.dp),
+            contentPadding = PaddingValues(top = 12.dp + topInset, bottom = bottomInset),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             val animeFirst = when {
@@ -1979,7 +2236,8 @@ fun MediaDetailsScreen(
     onBack: () -> Unit,
     onNavigateToSession: (String) -> Unit,
     onOpenPerson: (Int, String) -> Unit = { _, _ -> },
-    onOpenCompany: (Int, String) -> Unit = { _, _ -> }
+    onOpenCompany: (Int, String) -> Unit = { _, _ -> },
+    onOpenMedia: (MediaItemModel) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     var media by remember(initialMedia.id) { mutableStateOf(initialMedia) }
@@ -1989,6 +2247,10 @@ fun MediaDetailsScreen(
     LaunchedEffect(initialMedia.id) {
         castList = ServiceLocator.catalogRepository.fetchCast(initialMedia)
         companyList = ServiceLocator.catalogRepository.fetchProductionCompanies(initialMedia)
+    }
+    var moreLikeThis by remember(initialMedia.id) { mutableStateOf<List<MediaItemModel>>(emptyList()) }
+    LaunchedEffect(initialMedia.id) {
+        moreLikeThis = runCatching { TmdbExtras.fetchRecommendations(initialMedia) }.getOrDefault(emptyList())
     }
     var inWatchLater by remember(media.id) {
         mutableStateOf(ServiceLocator.prefsStore.getWatchLater().any { it.id == media.id })
@@ -2175,43 +2437,199 @@ fun MediaDetailsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onBack,
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                    modifier = Modifier
-                        .tvFocusHighlight(RoundedCornerShape(50))
-                        .height(36.dp)
-                ) {
-                    Text("← Back", color = Color.White, fontSize = 13.sp)
-                }
+            val t = AppTheme.c
+            val detailsContext = LocalContext.current
 
-                if (media.isAnime) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0x33E50914),
-                        border = BorderStroke(1.dp, AppTheme.c.accent)
-                    ) {
+            // ---- Full-bleed backdrop with a floating back button ----
+            Box(
+                modifier = Modifier
+                    .horizontalBleed(16.dp)
+                    .fillMaxWidth()
+                    .height(260.dp)
+            ) {
+                AsyncImage(
+                    model = media.backdropUrl.ifBlank { media.posterUrl },
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF181818))
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color(0x99000000),
+                                0.3f to Color.Transparent,
+                                0.7f to Color.Transparent,
+                                1f to t.background
+                            )
+                        )
+                )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(12.dp)
+                        .size(40.dp)
+                        .tvFocusHighlight(CircleShape, focusedScale = 1.12f)
+                        .clip(CircleShape)
+                        .background(Color(0x66000000))
+                        .clickable(onClick = onBack)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            // ---- Title block ----
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = media.title,
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    lineHeight = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                if (!media.romajiTitle.isNullOrBlank() && media.romajiTitle != media.title) {
+                    Text(
+                        text = media.romajiTitle!!,
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                // Meta line: type · year · [SUB] · seasons
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val kindLabel = when {
+                        media.isAnime && media.isSeries -> "Anime"
+                        media.isAnime -> "Anime Movie"
+                        media.isSeries -> "Series"
+                        else -> "Movie"
+                    }
+                    Text(kindLabel, color = Color(0xFFB3B3B3), fontSize = 14.sp)
+                    if (media.releaseYear.isNotBlank()) {
+                        Text(media.releaseYear.take(4), color = Color(0xFFB3B3B3), fontSize = 14.sp)
+                    }
+                    if (media.isAnime) {
                         Text(
-                            text = "🇯🇵 SUBTITLED (ORIGINAL AUDIO)",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            text = "SUB",
+                            color = Color(0xFFD0D0D0),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .border(1.dp, Color(0xFF8A8A8A), RoundedCornerShape(3.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                    if (media.isSeries && seasonsList.isNotEmpty()) {
+                        Text(
+                            text = if (seasonsList.size == 1) "1 Season" else "${seasonsList.size} Seasons",
+                            color = Color(0xFFB3B3B3),
+                            fontSize = 14.sp
                         )
                     }
                 }
+                Text(
+                    text = "\u2605 " + String.format("%.1f", media.rating),
+                    color = Color(0xFFB3B3B3),
+                    fontSize = 14.sp
+                )
+                val langName = remember(media.originalLanguage) {
+                    runCatching { java.util.Locale(media.originalLanguage).displayLanguage }.getOrDefault("")
+                }
+                if (langName.isNotBlank()) {
+                    Text(
+                        text = if (media.isAnime) "$langName \u00B7 English subtitles" else langName,
+                        color = Color(0xFF8C8C8C),
+                        fontSize = 13.sp
+                    )
+                }
+            }
 
-                Button(
+            // ---- Primary action: full-width white Play / Resume ----
+            if (continueEntry != null) {
+                DetailsWideButton(
+                    text = if (continueEntry.seasonNumber != null && continueEntry.episodeNumber != null) {
+                        "Resume S${continueEntry.seasonNumber}:E${continueEntry.episodeNumber}"
+                    } else {
+                        "Resume"
+                    },
+                    filled = true,
+                    modifier = if (!media.isSeries) Modifier.focusRequester(playFocusRequester) else Modifier,
+                    onClick = {
+                        val epRef = if (media.isSeries) {
+                            EpisodeRef(
+                                seasonNumber = continueEntry.seasonNumber ?: 1,
+                                episodeNumber = continueEntry.episodeNumber ?: 1,
+                                title = continueEntry.episodeTitle ?: "Episode ${continueEntry.episodeNumber ?: 1}"
+                            )
+                        } else null
+                        if (epRef != null) {
+                            lastPlayedEpisodeNum = epRef.episodeNumber
+                            lastPlayedSeasonNum = epRef.seasonNumber
+                        }
+                        startStreamResolution(epRef, startFromZero = false, origin = PlayOrigin.RESUME)
+                    }
+                )
+            }
+            if (!media.isSeries) {
+                DetailsWideButton(
+                    text = when {
+                        continueEntry != null -> "Play from beginning"
+                        media.isAnime -> "Play (SUB)"
+                        else -> "Play"
+                    },
+                    filled = continueEntry == null,
+                    modifier = if (continueEntry == null) Modifier.focusRequester(playFocusRequester) else Modifier,
+                    onClick = {
+                        startStreamResolution(
+                            episode = null,
+                            startFromZero = true,
+                            origin = PlayOrigin.USER_PICK
+                        )
+                    }
+                )
+            }
+
+            // ---- Overview (tap to expand) ----
+            var overviewExpanded by remember(media.id) { mutableStateOf(false) }
+            if (media.overview.isNotBlank()) {
+                Text(
+                    text = media.overview,
+                    color = Color(0xFFE0E0E0),
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    maxLines = if (overviewExpanded) Int.MAX_VALUE else 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize(tween(220))
+                        .clickable { overviewExpanded = !overviewExpanded }
+                )
+            }
+
+            // ---- Action row: My List · Trailer · Share ----
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(30.dp),
+                modifier = Modifier.padding(top = 2.dp)
+            ) {
+                DetailsActionItem(
+                    icon = if (inWatchLater) Icons.Filled.Check else Icons.Filled.Add,
+                    label = "My List",
                     onClick = {
                         if (inWatchLater) {
                             ServiceLocator.prefsStore.removeFromWatchLater(media.id)
@@ -2226,248 +2644,47 @@ fun MediaDetailsScreen(
                                 ServiceLocator.catalogRepository.syncProgressToCloud(media, inWatchlist = true)
                             }
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (inWatchLater) Color(0xFF3A3A3A) else AppTheme.c.glassBorder
-                    ),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                    modifier = Modifier
-                        .tvFocusHighlight(RoundedCornerShape(50))
-                        .height(36.dp)
-                ) {
-                    Text(
-                        text = if (inWatchLater) "✓ Saved" else "+ Watch Later",
-                        color = Color.White,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-
-            if (media.backdropUrl.isNotBlank()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(170.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                ) {
-                    AsyncImage(
-                        model = media.backdropUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.DarkGray)
-                    )
-                    // Fade the bottom into the page background so it blends in
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, AppTheme.c.background)
-                                )
-                            )
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.width(120.dp)
-                ) {
-                    AsyncImage(
-                        model = media.posterUrl,
-                        contentDescription = media.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .width(120.dp)
-                            .height(175.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.DarkGray)
-                    )
-                    if (continueEntry != null) {
-                        Button(
-                            onClick = {
-                                val epRef = if (media.isSeries) {
-                                    EpisodeRef(
-                                        seasonNumber = continueEntry.seasonNumber ?: 1,
-                                        episodeNumber = continueEntry.episodeNumber ?: 1,
-                                        title = continueEntry.episodeTitle ?: "Episode ${continueEntry.episodeNumber ?: 1}"
+                    }
+                )
+                DetailsActionItem(
+                    icon = Icons.Outlined.Theaters,
+                    label = "Trailer",
+                    onClick = {
+                        scope.launch {
+                            val key = runCatching { TmdbExtras.fetchTrailerKey(media) }.getOrNull()
+                            if (key != null) {
+                                runCatching {
+                                    detailsContext.startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key"))
                                     )
-                                } else null
-                                if (epRef != null) {
-                                    lastPlayedEpisodeNum = epRef.episodeNumber
-                                    lastPlayedSeasonNum = epRef.seasonNumber
                                 }
-                                startStreamResolution(epRef, startFromZero = false, origin = PlayOrigin.RESUME)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier
-                                .then(
-                                    // Movies with saved progress: Resume is the first thing focused
-                                    if (!media.isSeries) Modifier.focusRequester(playFocusRequester) else Modifier
-                                )
-                                .tvFocusHighlight(RoundedCornerShape(8.dp))
-                                .fillMaxWidth()
-                                .height(34.dp)
-                        ) {
-                            Text(
-                                text = if (continueEntry.seasonNumber != null && continueEntry.episodeNumber != null) {
-                                    "▶ Resume S${continueEntry.seasonNumber}:E${continueEntry.episodeNumber}"
-                                } else {
-                                    "▶ Resume"
-                                },
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    // Same design language as the home hero: kicker, big title, TMDB pill
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(9.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(AppTheme.c.accentGradient)
-                        )
-                        Text(
-                            text = media.typeHeaderLabel,
-                            color = Color(0xFFDADADA),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 3.sp
-                        )
-                    }
-                    Text(
-                        text = media.title,
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        lineHeight = 28.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "TMDB",
-                            color = Color.Black,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(Color(0xFFF5C518))
-                                .padding(horizontal = 5.dp, vertical = 1.dp)
-                        )
-                        Text(
-                            text = String.format("%.1f", media.rating) + "/10",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = media.releaseYear.take(4),
-                            color = AppTheme.c.accent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    if (!media.romajiTitle.isNullOrBlank() && media.romajiTitle != media.title) {
-                        Text(
-                            text = media.romajiTitle!!,
-                            color = Color.Gray,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Text(
-                        text = media.overview,
-                        color = Color.LightGray,
-                        fontSize = 13.sp,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    val trailerContext = LocalContext.current
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .padding(top = 2.dp)
-                            .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.06f)
-                            .clip(RoundedCornerShape(50))
-                            .background(AppTheme.c.glass)
-                            .border(1.dp, AppTheme.c.glassBorder, RoundedCornerShape(50))
-                            .clickable {
-                                scope.launch {
-                                    val key = runCatching { TmdbExtras.fetchTrailerKey(media) }.getOrNull()
-                                    if (key != null) {
-                                        runCatching {
-                                            trailerContext.startActivity(
-                                                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key"))
-                                            )
-                                        }
-                                    } else {
-                                        android.widget.Toast
-                                            .makeText(trailerContext, "No trailer found", android.widget.Toast.LENGTH_SHORT)
-                                            .show()
-                                    }
-                                }
+                            } else {
+                                android.widget.Toast
+                                    .makeText(detailsContext, "No trailer found", android.widget.Toast.LENGTH_SHORT)
+                                    .show()
                             }
-                            .padding(horizontal = 14.dp, vertical = 7.dp)
-                    ) {
-                        Text("▶ Watch Trailer", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    }
-
-                    if (!media.isSeries) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Button(
-                            onClick = {
-                                startStreamResolution(
-                                    episode = null,
-                                    startFromZero = true,
-                                    origin = PlayOrigin.USER_PICK
-                                )
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
-                            modifier = Modifier
-                                .then(
-                                    if (continueEntry == null) Modifier.focusRequester(playFocusRequester) else Modifier
-                                )
-                                .tvFocusHighlight(RoundedCornerShape(8.dp), focusedScale = 1.08f)
-                                .height(38.dp)
-                        ) {
-                            Text(
-                                text = if (media.isAnime) "▶ Play Movie (SUB)" else "▶ Play Movie",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
                         }
                     }
-                }
+                )
+                DetailsActionItem(
+                    icon = Icons.Outlined.Share,
+                    label = "Share",
+                    onClick = {
+                        val link = when {
+                            media.isAnime && media.anilistId != null -> "https://anilist.co/anime/${media.anilistId}"
+                            media.isSeries -> "https://www.themoviedb.org/tv/${media.tmdbId ?: media.id}"
+                            else -> "https://www.themoviedb.org/movie/${media.tmdbId ?: media.id}"
+                        }
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "${media.title} (${media.releaseYear.take(4)})\n$link")
+                        }
+                        runCatching { detailsContext.startActivity(Intent.createChooser(send, "Share")) }
+                    }
+                )
             }
+
+            HorizontalDivider(color = Color(0x1FFFFFFF))
 
             if (castList.isNotEmpty()) {
                 HorizontalDivider(color = Color.DarkGray)
@@ -2742,6 +2959,45 @@ fun MediaDetailsScreen(
                     }
                 }
             }
+            if (moreLikeThis.isNotEmpty()) {
+                HorizontalDivider(color = Color(0x1FFFFFFF))
+                Text("More like this", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    moreLikeThis.take(12).chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            pair.forEach { rec ->
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .tvFocusHighlight(RoundedCornerShape(8.dp), focusedScale = 1.05f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { onOpenMedia(rec) }
+                                ) {
+                                    AsyncImage(
+                                        model = rec.backdropUrl.ifBlank { rec.posterUrl },
+                                        contentDescription = rec.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(16f / 9f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF181818))
+                                    )
+                                    Text(
+                                        text = rec.title,
+                                        color = Color(0xFFE6E6E6),
+                                        fontSize = 13.sp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
+                                    )
+                                }
+                            }
+                            if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
         }
 
         if (isResolving) {
@@ -2769,6 +3025,79 @@ fun MediaDetailsScreen(
                 }
             )
         }
+    }
+}
+
+
+/** Lets a child ignore its parent's horizontal padding (edge-to-edge images). */
+fun Modifier.horizontalBleed(bleed: Dp): Modifier = this.layout { measurable, constraints ->
+    val extra = bleed.roundToPx() * 2
+    val maxW = if (constraints.hasBoundedWidth) constraints.maxWidth + extra else constraints.maxWidth
+    val placeable = measurable.measure(constraints.copy(minWidth = maxW, maxWidth = maxW))
+    val width = if (constraints.hasBoundedWidth) constraints.maxWidth else placeable.width
+    layout(width, placeable.height) { placeable.place(-bleed.roundToPx(), 0) }
+}
+
+/** Full-width pill button used on the details page (white = primary). */
+@Composable
+fun DetailsWideButton(
+    text: String,
+    filled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .tvFocusHighlight(RoundedCornerShape(10.dp), focusedScale = 1.03f)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (filled) Color.White else Color(0xFF2A2A2A))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.PlayArrow,
+            contentDescription = null,
+            tint = if (filled) Color.Black else Color.White,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = text,
+            color = if (filled) Color.Black else Color.White,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}
+
+/** Icon-over-label action used in the details action row. */
+@Composable
+fun DetailsActionItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .tvFocusHighlight(RoundedCornerShape(10.dp), focusedScale = 1.1f)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Crossfade(targetState = icon, animationSpec = tween(200), label = "detailsActionIcon") { ic ->
+            Icon(imageVector = ic, contentDescription = label, tint = Color.White, modifier = Modifier.size(26.dp))
+        }
+        Text(
+            text = label,
+            color = Color(0xFFA6A6A6),
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 
@@ -3050,6 +3379,38 @@ fun SearchScreen(
     var genreExpanded by remember { mutableStateOf(false) }
     var yearExpanded by remember { mutableStateOf(false) }
 
+    var liveJob by remember { mutableStateOf<Job?>(null) }
+    fun runSearch(saveRecent: Boolean) {
+        if (saveRecent && queryInput.isNotBlank()) {
+            recentSearches = RecentSearchStore.add(searchContext, queryInput)
+        }
+        isSearching = true
+        hasSearched = true
+        liveJob?.cancel()
+        liveJob = scope.launch {
+            val results = ServiceLocator.catalogRepository.searchCatalog(
+                query = queryInput,
+                selectedType = selectedType,
+                selectedGenre = selectedGenre,
+                selectedYear = selectedYear
+            )
+            searchResults = results
+            isSearching = false
+        }
+    }
+    // Search as you type: wait for a short pause, then search without closing the keyboard
+    LaunchedEffect(queryInput) {
+        if (queryInput.trim().length >= 2) {
+            delay(450)
+            runSearch(saveRecent = false)
+        } else if (queryInput.isEmpty() && selectedType == "All" && selectedGenre == "All" && selectedYear == "All") {
+            liveJob?.cancel()
+            hasSearched = false
+            isSearching = false
+            searchResults = emptyList()
+        }
+    }
+
     fun performSearch() {
         focusManager.clearFocus()
         keyboardController?.hide()
@@ -3083,43 +3444,71 @@ fun SearchScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        OutlinedButton(
-            onClick = {
-                focusManager.clearFocus()
-                keyboardController?.hide()
-                onBack()
-            },
-            modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp)).height(36.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-        ) {
-            Text("← Back", color = Color.White, fontSize = 13.sp)
-        }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(42.dp)
+                    .tvFocusHighlight(CircleShape, focusedScale = 1.12f)
+                    .clip(CircleShape)
+                    .clickable {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        onBack()
+                    }
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
             OutlinedTextField(
                 value = queryInput,
                 onValueChange = { queryInput = it },
                 placeholder = {
                     Text(
-                        "Search movies, series, or anime...",
-                        color = Color(0xFF888888),
-                        fontSize = 14.sp,
+                        "Search movies, series, anime...",
+                        color = Color(0xFF8A8A8A),
+                        fontSize = 15.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 },
-                leadingIcon = { Text("🔍", fontSize = 15.sp) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (queryInput.isNotEmpty()) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Clear",
+                            tint = Color(0xFFB0B0B0),
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .clickable { queryInput = "" }
+                        )
+                    }
+                },
                 singleLine = true,
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = AppTheme.c.surfaceHigh,
-                    unfocusedContainerColor = AppTheme.c.surfaceHigh,
-                    focusedBorderColor = AppTheme.c.accent,
-                    unfocusedBorderColor = AppTheme.c.glassBorder,
+                    focusedContainerColor = Color(0xFF111111),
+                    unfocusedContainerColor = Color(0xFF161616),
+                    focusedBorderColor = Color(0xFFE6E6E6),
+                    unfocusedBorderColor = Color(0x1FFFFFFF),
+                    cursorColor = Color.White,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 ),
@@ -3127,17 +3516,8 @@ fun SearchScreen(
                 keyboardActions = KeyboardActions(onSearch = { performSearch() }),
                 modifier = Modifier
                     .weight(1f)
-                    .height(52.dp)
+                    .height(56.dp)
             )
-            Button(
-                onClick = { performSearch() },
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AppTheme.c.accent),
-                contentPadding = PaddingValues(horizontal = 18.dp),
-                modifier = Modifier.tvFocusHighlight(RoundedCornerShape(12.dp)).height(52.dp)
-            ) {
-                Text("Search", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            }
         }
 
         Row(
@@ -3185,8 +3565,21 @@ fun SearchScreen(
         HorizontalDivider(color = AppTheme.c.glassBorder)
 
         if (isSearching) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AppTheme.c.accent)
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 105.dp),
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+                userScrollEnabled = false,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(12) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(2f / 3f)
+                            .shimmer(RoundedCornerShape(8.dp))
+                    )
+                }
             }
         } else if (!hasSearched) {
             if (recentSearches.isEmpty()) {
@@ -3198,21 +3591,29 @@ fun SearchScreen(
                     )
                 }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF141414))
+                        .border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(16.dp))
+                        .padding(14.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Recent searches",
+                            text = "\u21BA  Recent searches",
                             color = Color.White,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Clear",
-                            color = AppTheme.c.accent,
+                            text = "Clear all",
+                            color = Color(0xFFB0B0B0),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier

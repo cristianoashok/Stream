@@ -277,6 +277,11 @@ fun AppNavHost() {
                     navController.navigate("company/$companyId/${android.net.Uri.encode(companyName)}") {
                         launchSingleTop = true
                     }
+                },
+                onOpenMedia = { item ->
+                    // "More like this": push a fresh details page on top
+                    catalogRepo.putMedia(item)
+                    navController.navigate("details/${item.id}")
                 }
             )
         }
