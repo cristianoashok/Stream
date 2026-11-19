@@ -1166,26 +1166,30 @@ class CatalogRepository(
 
     // --- Subtitles (Wyzie) & Intro/Outro Skip Segments (AniSkip + TheIntroDB) ---
 
+    // Same title/episode is looked up twice per play (resolver + player): reuse the result
+    private val wyzieResultCache = ConcurrentHashMap<String, Pair<Long, List<SubtitleTrack>>>()
+
     suspend fun fetchSubtitlesForMedia(media: MediaItemModel, episode: EpisodeRef?): List<SubtitleTrack> = withContext(Dispatchers.IO) {
         val cleanTmdbId = media.tmdbId ?: (if (media.id >= 100_000_000) media.id - 100_000_000 else media.id)
         if (cleanTmdbId <= 0) return@withContext emptyList()
         val s = (episode?.seasonNumber ?: 1).coerceAtLeast(1)
         val e = (episode?.episodeNumber ?: 1).coerceAtLeast(1)
+        val cacheKey = "${if (media.isSeries) "tv" else "mv"}-$cleanTmdbId-$s-$e"
+        wyzieResultCache[cacheKey]?.let { (at, cached) ->
+            if (System.currentTimeMillis() - at < 30 * 60_000L) return@withContext cached
+        }
 
         // Wyzie requires an API key on every request (from local.properties -> BuildConfig)
         val wyzieKey = BuildConfig.WYZIE_API_KEY
         val keyParam = if (wyzieKey.isNotBlank()) "&key=" + java.net.URLEncoder.encode(wyzieKey, "UTF-8") else ""
-        val endpoints = if (media.isSeries) {
-            listOf(
-                "https://sub.wyzie.ru/search?id=$cleanTmdbId&season=$s&episode=$e$keyParam",
-                "https://sub.wyzie.ru/search?id=$cleanTmdbId&season=$s&episode=$e&source=all$keyParam"
-            )
+        // Ask for English first (big catalogues used to push English past the result cap);
+        // only if there's none, ask once more for every language. 1 request per search.
+        val base = if (media.isSeries) {
+            "https://sub.wyzie.ru/search?id=$cleanTmdbId&season=$s&episode=$e$keyParam"
         } else {
-            listOf(
-                "https://sub.wyzie.ru/search?id=$cleanTmdbId$keyParam",
-                "https://sub.wyzie.ru/search?id=$cleanTmdbId&source=all$keyParam"
-            )
+            "https://sub.wyzie.ru/search?id=$cleanTmdbId$keyParam"
         }
+        val endpoints = listOf("$base&language=en", base)
 
         val tracks = mutableListOf<SubtitleTrack>()
         for (urlStr in endpoints) {
@@ -1209,7 +1213,7 @@ class CatalogRepository(
                     if (body.startsWith("[")) {
                         val arr = JSONArray(body)
                         val seenCounts = mutableMapOf<String, Int>()
-                        for (i in 0 until minOf(arr.length(), 25)) {
+                        for (i in 0 until minOf(arr.length(), 40)) {
                             val obj = arr.getJSONObject(i)
                             val subUrl = obj.optString("url", "")
                             val lang = obj.optString("language", "en").lowercase()
@@ -1227,7 +1231,9 @@ class CatalogRepository(
             } catch (_: Exception) {}
         }
         Logger.i("Subtitles", "Wyzie found ${tracks.size} subtitle(s) for ${media.title}")
-        tracks.sortedWith(compareByDescending<SubtitleTrack> { it.language.startsWith("en") }.thenBy { it.label })
+        val sorted = tracks.sortedWith(compareByDescending<SubtitleTrack> { it.language.startsWith("en") }.thenBy { it.label })
+        if (sorted.isNotEmpty()) wyzieResultCache[cacheKey] = System.currentTimeMillis() to sorted
+        sorted
     }
 
     suspend fun fetchSkipSegments(

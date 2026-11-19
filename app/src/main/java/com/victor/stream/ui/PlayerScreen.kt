@@ -416,6 +416,9 @@ fun PlayerScreen(
     LaunchedEffect(subtitleUrls) {
         val pending = playerState.availableSubtitles
             .filter { !com.victor.stream.player.SubtitleVerifier.isVerified(it.url) }
+            // Wyzie files are already labelled by a subtitle database; checking them would
+            // only use up the free daily request allowance
+            .filter { !it.url.contains("wyzie", ignoreCase = true) }
             .take(15)
         if (pending.isEmpty()) return@LaunchedEffect
         val headers = activeSession.stream.headers
