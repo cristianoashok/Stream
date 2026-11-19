@@ -41,6 +41,18 @@ object SubtitleVerifier {
     fun isUnreadableButNamedEnglish(track: SubtitleTrack): Boolean =
         verdicts[track.url]?.unreadable == true && track.language.equals("en", ignoreCase = true)
 
+    /** Records a verdict for subtitle text we already have (e.g. unzipped SubDL files). */
+    fun recordContent(url: String, text: String): Verdict {
+        val v = analyze(text)
+        verdicts[url] = v
+        Logger.i(
+            "Subtitles",
+            "Checked ${shortName(url)}: " +
+                (if (v.valid) "subtitle, language=${v.language ?: "unknown"}" else "NOT a subtitle (skipped)")
+        )
+        return v
+    }
+
     /** Relabels tracks we've checked and removes ones that aren't real subtitles. */
     fun apply(tracks: List<SubtitleTrack>): List<SubtitleTrack> = tracks.mapNotNull { track ->
         val v = verdicts[track.url] ?: return@mapNotNull track

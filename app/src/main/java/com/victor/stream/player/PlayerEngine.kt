@@ -152,7 +152,13 @@ class PlaybackController(
         .setReadTimeoutMs(15_000)
 
     val exoPlayer: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(context.applicationContext).setDataSourceFactory(httpDataSourceFactory))
+        .setMediaSourceFactory(
+            DefaultMediaSourceFactory(context.applicationContext).setDataSourceFactory(
+                // DefaultDataSource: http(s) goes to httpDataSourceFactory exactly as before;
+                // file:// is added so unzipped backup subtitles (SubDL) can be loaded
+                androidx.media3.datasource.DefaultDataSource.Factory(context.applicationContext, httpDataSourceFactory)
+            )
+        )
         .build()
 
     private var currentMedia: MediaItemModel? = null

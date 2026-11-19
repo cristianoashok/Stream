@@ -418,7 +418,7 @@ fun PlayerScreen(
             .filter { !com.victor.stream.player.SubtitleVerifier.isVerified(it.url) }
             // Wyzie files are already labelled by a subtitle database; checking them would
             // only use up the free daily request allowance
-            .filter { !it.url.contains("wyzie", ignoreCase = true) }
+            .filter { !it.url.contains("wyzie", ignoreCase = true) && !it.url.startsWith("file:") }
             .take(15)
         if (pending.isEmpty()) return@LaunchedEffect
         val headers = activeSession.stream.headers
@@ -428,6 +428,38 @@ fun PlayerScreen(
             }.awaitAll()
         }
         playbackController.refreshSubtitles()
+    }
+
+    // ---- Backup subtitles (SubDL): used when nothing else has English ----
+    var subdlSearching by remember { mutableStateOf(false) }
+    fun hasUsableEnglish(): Boolean = playbackController.state.value.availableSubtitles.any {
+        com.victor.stream.player.SubtitleVerifier.isConfirmedEnglish(it.url) ||
+            (it.url.contains("wyzie", ignoreCase = true) && (it.language.startsWith("en", true) || it.label.contains("English", true)))
+    }
+    fun searchSubDl(manual: Boolean) {
+        if (subdlSearching) return
+        subdlSearching = true
+        scope.launch {
+            val found = com.victor.stream.player.SubDlSubtitles.fetch(
+                context = context,
+                media = media,
+                episode = activeEpisode,
+                maxFiles = if (manual) 5 else 3
+            )
+            subdlSearching = false
+            if (found.isNotEmpty()) {
+                playbackController.updateSubtitlesList(found)
+                if (manual) statusToastLabel = "Added ${found.size} subtitle(s) from SubDL"
+            } else if (manual) {
+                statusToastLabel = "No English subtitles on SubDL for this one"
+            }
+        }
+    }
+    LaunchedEffect(media.id, activeEpisode?.seasonNumber, activeEpisode?.episodeNumber) {
+        if (!com.victor.stream.player.SubDlSubtitles.isConfigured || media.isAnime) return@LaunchedEffect
+        // Give Wyzie and the page subtitles a few seconds first
+        delay(6000L)
+        if (!hasUsableEnglish()) searchSubDl(manual = false)
     }
 
     // ---- Casting (Chromecast / Google TV through the phone relay) ----
@@ -1299,6 +1331,16 @@ fun PlayerScreen(
                                 ) {
                                     playbackController.selectSubtitleIndex(idx)
                                     settingsTab = "Main"
+                                }
+                            }
+                            if (com.victor.stream.player.SubDlSubtitles.isConfigured && !media.isAnime) {
+                                item {
+                                    RightDrawerSubOption(
+                                        label = if (subdlSearching) "Searching SubDL\u2026" else "\uD83D\uDD0D  Find more subtitles (SubDL)",
+                                        isSelected = false
+                                    ) {
+                                        searchSubDl(manual = true)
+                                    }
                                 }
                             }
                         }

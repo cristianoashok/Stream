@@ -260,12 +260,18 @@ object CastRelay {
             writeText(out, 404, "Not Found", "no such subtitle")
             return
         }
-        val conn = URL(track.url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 20_000
-        conn.setRequestProperty("User-Agent", DEFAULT_UA)
-        val text = conn.inputStream.use { readLimited(it, 4 * 1024 * 1024) }.toString(Charsets.UTF_8)
-        conn.disconnect()
+        val text = if (track.url.startsWith("file:")) {
+            // Backup subtitles (SubDL) are unzipped into the app's cache folder
+            java.io.File(java.net.URI(track.url)).readText(Charsets.UTF_8)
+        } else {
+            val conn = URL(track.url).openConnection() as HttpURLConnection
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 20_000
+            conn.setRequestProperty("User-Agent", DEFAULT_UA)
+            val body = conn.inputStream.use { readLimited(it, 4 * 1024 * 1024) }.toString(Charsets.UTF_8)
+            conn.disconnect()
+            body
+        }
         val vtt = toWebVtt(text).toByteArray(Charsets.UTF_8)
         writeHead(out, 200, "OK", mapOf("Content-Type" to "text/vtt; charset=utf-8"), vtt.size.toLong())
         out.write(vtt)

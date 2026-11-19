@@ -1222,7 +1222,7 @@ class CatalogRepository(
                             if (subUrl.startsWith("http")) {
                                 val c = (seenCounts[disp] ?: 0) + 1
                                 seenCounts[disp] = c
-                                val label = if (c == 1) disp else "$disp #$c"
+                                val label = if (c == 1) "$disp \u00B7 Wyzie" else "$disp \u00B7 Wyzie #$c"
                                 tracks.add(SubtitleTrack(subUrl, label, lang, fmt))
                             }
                         }

@@ -14,6 +14,8 @@ if (localPropertiesFile.exists()) {
 val tmdbApiKey: String = localProperties.getProperty("TMDB_API_KEY") ?: ""
 // Wyzie subtitle API key - also kept only in local.properties (not on GitHub)
 val wyzieApiKey: String = localProperties.getProperty("WYZIE_API_KEY") ?: ""
+// SubDL (backup subtitle source) key - local.properties only
+val subdlApiKey: String = localProperties.getProperty("SUBDL_API_KEY") ?: ""
 
 android {
     namespace = "com.victor.stream"
@@ -33,6 +35,7 @@ android {
         // Passes TMDB_API_KEY safely into your Kotlin code as BuildConfig.TMDB_API_KEY
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
         buildConfigField("String", "WYZIE_API_KEY", "\"$wyzieApiKey\"")
+        buildConfigField("String", "SUBDL_API_KEY", "\"$subdlApiKey\"")
     }
 
     buildTypes {

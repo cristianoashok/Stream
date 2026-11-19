@@ -4,3 +4,5 @@ sdk.dir=****
 TMDB_API_KEY=***
 # Free key from https://store.wyzie.io/redeem - used for subtitles
 WYZIE_API_KEY=your_wyzie_key_here
+# Free key from https://subdl.com (account -> API) - backup subtitle source
+SUBDL_API_KEY=your_subdl_key_here
