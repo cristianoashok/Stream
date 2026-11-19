@@ -22,6 +22,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.victor.stream.cast.CastController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -406,6 +410,22 @@ fun PlayerScreen(
     }
 
     val playerState by playbackController.state.collectAsState()
+
+    // ---- Subtitle check: look inside each subtitle file (real subtitle? which language?) ----
+    val subtitleUrls = playerState.availableSubtitles.map { it.url }
+    LaunchedEffect(subtitleUrls) {
+        val pending = playerState.availableSubtitles
+            .filter { !com.victor.stream.player.SubtitleVerifier.isVerified(it.url) }
+            .take(15)
+        if (pending.isEmpty()) return@LaunchedEffect
+        val headers = activeSession.stream.headers
+        withContext(Dispatchers.IO) {
+            pending.map { track ->
+                async { com.victor.stream.player.SubtitleVerifier.verify(track, headers) }
+            }.awaitAll()
+        }
+        playbackController.refreshSubtitles()
+    }
 
     // ---- Casting (Chromecast / Google TV through the phone relay) ----
     val castAvailable = remember(context) { !isTv && CastController.isAvailable(context) }
@@ -837,6 +857,22 @@ fun PlayerScreen(
                     resizeMode = playerState.resizeMode
                     keepScreenOn = true
                     setShowSubtitleButton(true)
+                    // Subtitles: white text with a black outline, no black box behind them,
+                    // so they never block the picture. Ignore colours/boxes baked into files.
+                    subtitleView?.apply {
+                        setApplyEmbeddedStyles(false)
+                        setStyle(
+                            androidx.media3.ui.CaptionStyleCompat(
+                                android.graphics.Color.WHITE,
+                                android.graphics.Color.TRANSPARENT,
+                                android.graphics.Color.TRANSPARENT,
+                                androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                android.graphics.Color.BLACK,
+                                null
+                            )
+                        )
+                        setBottomPaddingFraction(0.05f)
+                    }
                     setShowNextButton(media.isSeries)
                     setShowPreviousButton(media.isSeries)
                     setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->

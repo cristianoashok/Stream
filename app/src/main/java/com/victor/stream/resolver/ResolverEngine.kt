@@ -90,17 +90,28 @@ object StreamUrlClassifier {
         return path.endsWith(".vtt") || path.endsWith(".srt") || lower.contains(".vtt?") || lower.contains(".srt?")
     }
 
+    /**
+     * Best guess of a subtitle's language from its link, matching whole words only
+     * (so "space" isn't Spanish and "free" isn't French). Unknown stays "und": the
+     * player's SubtitleVerifier then reads the file to find the real language.
+     */
     fun inferSubtitleLabel(url: String, index: Int): Pair<String, String> {
-        val l = url.lowercase()
+        val name = url.lowercase().substringBefore('?').substringAfterLast('/')
+        val tokens = (url.lowercase().substringBefore('?').split('/').takeLast(3).joinToString(" ") + " " + name)
+            .split(Regex("[^a-z]+"))
+            .filter { it.isNotBlank() }
+            .toSet()
+        fun has(vararg words: String) = words.any { it in tokens }
         return when {
-            l.contains("eng") || l.contains("_en") || l.contains("-en") || l.contains("/en.") -> "English" to "en"
-            l.contains("spa") || l.contains("_es") || l.contains("spanish") -> "Spanish" to "es"
-            l.contains("fre") || l.contains("fra") || l.contains("french") -> "French" to "fr"
-            l.contains("ger") || l.contains("deu") || l.contains("german") -> "German" to "de"
-            l.contains("por") || l.contains("portuguese") -> "Portuguese" to "pt"
-            l.contains("ara") || l.contains("arabic") -> "Arabic" to "ar"
-            l.contains("hin") || l.contains("hindi") -> "Hindi" to "hi"
-            else -> "English CC #${index + 1}" to "en"
+            has("en", "eng", "english") -> "English" to "en"
+            has("es", "spa", "spanish", "espanol") -> "Spanish" to "es"
+            has("fr", "fre", "fra", "french") -> "French" to "fr"
+            has("de", "ger", "deu", "german") -> "German" to "de"
+            has("pt", "por", "portuguese", "ptbr") -> "Portuguese" to "pt"
+            has("ar", "ara", "arabic") -> "Arabic" to "ar"
+            has("hi", "hin", "hindi") -> "Hindi" to "hi"
+            has("it", "ita", "italian") -> "Italian" to "it"
+            else -> "Subtitle ${index + 1}" to "und"
         }
     }
 
@@ -220,7 +231,7 @@ object SnifferScript {
                                                     var subM = t.match(/https?:\\?\/\\?\/[^"'\s<>]+\.(?:vtt|srt)[^"'\s<>]*/gi);
                                                     if (subM && window.AndroidSniffer) {
                                                         for (var i = 0; i < subM.length; i++) {
-                                                            window.AndroidSniffer.reportSubtitle(subM[i].replace(/\\\//g, '/'), 'English');
+                                                            window.AndroidSniffer.reportSubtitle(subM[i].replace(/\\\//g, '/'), '');
                                                         }
                                                     }
                                                 }
@@ -391,6 +402,8 @@ class WebViewHost(context: Context) {
         @JavascriptInterface
         fun reportSubtitle(subUrl: String?, label: String?) {
             if (subUrl.isNullOrBlank() || !subUrl.startsWith("http") || StreamUrlClassifier.isBlockedDomain(subUrl)) return
+            // Same filter as the network path (skips thumbnail/storyboard VTTs)
+            if (!StreamUrlClassifier.isSubtitleUrl(subUrl)) return
             mainHandler.post {
                 if (!isDestroyed && boundGeneration == activeGeneration.get()) {
                     onSubtitleDiscovered?.invoke(boundGeneration, subUrl.trim(), label)

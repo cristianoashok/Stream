@@ -207,8 +207,12 @@ class PlaybackController(
             } ?: -1
             return if (byLang >= 0) byLang to list[byLang] else -1 to null
         }
-        // Auto: English if we have it, otherwise Off (don't guess a foreign language)
-        val enIdx = list.indexOfFirst { isEnglish(it) }
+        // Auto: English if we have it, otherwise Off (don't guess a foreign language).
+        // Only trust tracks whose content was checked (SubtitleVerifier) or that come from
+        // the subtitle API - page-scraped links are often other languages or thumbnails.
+        val enIdx = list.indexOfFirst {
+            SubtitleVerifier.isConfirmedEnglish(it.url) || (isEnglish(it) && it.url.contains("wyzie", ignoreCase = true))
+        }
         return if (enIdx >= 0) enIdx to list[enIdx] else -1 to null
     }
 
@@ -313,7 +317,7 @@ class PlaybackController(
         episodeTitle: String? = null
     ) {
         val mergedSubs = sortSubsEnglishFirst(
-            (stream.subtitles + _state.value.availableSubtitles).distinctBy { it.url }
+            SubtitleVerifier.apply((stream.subtitles + _state.value.availableSubtitles).distinctBy { it.url })
         )
         val (selectedIdx, activeSub) = resolveSubtitleSelection(mergedSubs)
 
@@ -415,7 +419,7 @@ class PlaybackController(
 
     fun updateSubtitlesList(newSubtitles: List<SubtitleTrack>) {
         val merged = sortSubsEnglishFirst(
-            (newSubtitles + _state.value.availableSubtitles).distinctBy { it.url }
+            SubtitleVerifier.apply((newSubtitles + _state.value.availableSubtitles).distinctBy { it.url })
         )
         if (merged.size == _state.value.availableSubtitles.size &&
             merged.map { it.url } == _state.value.availableSubtitles.map { it.url }
@@ -427,6 +431,23 @@ class PlaybackController(
         // If the track that SHOULD be showing (e.g. the English one that just loaded from
         // the subtitle API, after we first started on a non-English resolver track) isn't the
         // one currently loaded, switch to it now.
+        if (activeSub != null && activeSub.url != currentSubtitleUrl) {
+            loadSubtitleIntoPlayer(activeSub)
+        } else {
+            applyTrackSelectionParameters()
+        }
+    }
+
+    /**
+     * Re-applies subtitle checks (called when [SubtitleVerifier] finished looking at files):
+     * relabels languages, drops fake tracks and switches to real English if it's now known.
+     */
+    fun refreshSubtitles() {
+        val current = _state.value.availableSubtitles
+        if (current.isEmpty()) return
+        val cleaned = sortSubsEnglishFirst(SubtitleVerifier.apply(current).distinctBy { it.url })
+        val (idx, activeSub) = resolveSubtitleSelection(cleaned)
+        _state.update { it.copy(availableSubtitles = cleaned, selectedSubtitleIndex = idx) }
         if (activeSub != null && activeSub.url != currentSubtitleUrl) {
             loadSubtitleIntoPlayer(activeSub)
         } else {

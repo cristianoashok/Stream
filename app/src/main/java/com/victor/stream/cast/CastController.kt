@@ -15,6 +15,7 @@ import com.google.android.gms.cast.MediaMetadata
 import com.google.android.gms.cast.MediaSeekOptions
 import com.google.android.gms.cast.MediaStatus
 import com.google.android.gms.cast.MediaTrack
+import com.google.android.gms.cast.TextTrackStyle
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
@@ -219,9 +220,12 @@ object CastController {
             if (image.isNotBlank()) addImage(WebImage(Uri.parse(image)))
         }
 
-        val tracks = stream.subtitles.mapIndexedNotNull { i, sub ->
-            val subUrl = CastRelay.subtitleUrl(i) ?: return@mapIndexedNotNull null
-            MediaTrack.Builder((i + 1).toLong(), MediaTrack.TYPE_TEXT)
+        // Only real subtitle files, with their checked language (same as the phone player)
+        val subs = com.victor.stream.player.SubtitleVerifier.apply(stream.subtitles)
+        val tracks = subs.mapIndexedNotNull { i, sub ->
+            val subIndex = stream.subtitles.indexOfFirst { it.url == sub.url }
+            val subUrl = CastRelay.subtitleUrl(subIndex) ?: return@mapIndexedNotNull null
+            MediaTrack.Builder((subIndex + 1).toLong(), MediaTrack.TYPE_TEXT)
                 .setName(sub.label)
                 .setSubtype(MediaTrack.SUBTYPE_SUBTITLES)
                 .setContentId(subUrl)
@@ -230,15 +234,27 @@ object CastController {
                 .build()
         }
 
+        // Same subtitle look as the phone: white text, black outline, no box
+        val textStyle = TextTrackStyle().apply {
+            foregroundColor = 0xFFFFFFFF.toInt()
+            backgroundColor = 0x00000000
+            windowType = TextTrackStyle.WINDOW_TYPE_NONE
+            edgeType = TextTrackStyle.EDGE_TYPE_OUTLINE
+            edgeColor = 0xFF000000.toInt()
+        }
         val info = MediaInfo.Builder(url)
             .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
             .setContentType(contentType)
             .setMetadata(metadata)
             .setMediaTracks(tracks)
+            .setTextTrackStyle(textStyle)
             .build()
 
-        // Same default as the phone player: English subtitles on when available
-        val english = stream.subtitles.indexOfFirst { it.language.startsWith("en", ignoreCase = true) }
+        // Same default as the phone player: confirmed-English subtitles on when available
+        val englishSub = subs.firstOrNull {
+            com.victor.stream.player.SubtitleVerifier.isConfirmedEnglish(it.url)
+        }
+        val english = if (englishSub == null) -1 else stream.subtitles.indexOfFirst { it.url == englishSub.url }
         val request = MediaLoadRequestData.Builder()
             .setMediaInfo(info)
             .setAutoplay(true)

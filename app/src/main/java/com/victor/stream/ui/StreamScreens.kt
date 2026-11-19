@@ -141,47 +141,96 @@ import java.util.UUID
 // 1. SHARED UI COMPONENTS (PosterCard, Carousel, ResolvingOverlay)
 // ==========================================
 
+/**
+ * Clean "finding a server" loader: a ring that fills as servers are tried,
+ * the "2 / 12" count in the middle, one short line of text and Cancel.
+ * The detailed status text from the resolver is reduced to just that.
+ */
 @Composable
 fun ResolvingOverlay(
     statusText: String,
     onCancel: () -> Unit
 ) {
+    val t = AppTheme.c
+    val counter = remember(statusText) { Regex("\\((\\d+)/(\\d+)\\)").find(statusText) }
+    val current = counter?.groupValues?.get(1)?.toIntOrNull()
+    val total = counter?.groupValues?.get(2)?.toIntOrNull()
+    val episode = remember(statusText) {
+        Regex("S(\\d+):E(\\d+)").find(statusText)?.let { "Season ${it.groupValues[1]} \u00B7 Episode ${it.groupValues[2]}" }
+    }
+    val headline = when {
+        statusText.startsWith("Switching", ignoreCase = true) -> "Switching server"
+        else -> "Finding a server"
+    }
+    val progress by animateFloatAsState(
+        targetValue = if (current != null && total != null && total > 0) current.toFloat() / total else 0f,
+        animationSpec = tween(450),
+        label = "resolveProgress"
+    )
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xCC000000)),
+            .background(Color(0xE6000000))
+            .clickable(enabled = false) {},
         contentAlignment = Alignment.Center
     ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = AppTheme.c.surface),
-            shape = RoundedCornerShape(12.dp)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                CircularProgressIndicator(color = AppTheme.c.accent)
-                Text(
-                    text = statusText,
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(92.dp)) {
+                // Faint track + spinning arc, plus a ring that fills per server tried
+                CircularProgressIndicator(
+                    progress = { 1f },
+                    color = Color(0x1FFFFFFF),
+                    strokeWidth = 4.dp,
+                    modifier = Modifier.fillMaxSize()
                 )
-                val cancelFocus = remember { FocusRequester() }
-                LaunchedEffect(Unit) {
-                    delay(100)
-                    runCatching { cancelFocus.requestFocus() }
+                if (total != null) {
+                    CircularProgressIndicator(
+                        progress = { progress },
+                        color = t.accent,
+                        strokeWidth = 4.dp,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
-                OutlinedButton(
-                    onClick = onCancel,
-                    modifier = Modifier
-                        .focusRequester(cancelFocus)
-                        .tvFocusHighlight(RoundedCornerShape(50))
-                ) {
-                    Text("Cancel", color = Color.LightGray)
+                CircularProgressIndicator(
+                    color = Color(0x99FFFFFF),
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(72.dp)
+                )
+                if (current != null && total != null) {
+                    Text(
+                        text = "$current/$total",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
+            Text(headline, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            if (episode != null) {
+                Text(episode, color = Color(0xFF9A9A9A), fontSize = 13.sp)
+            }
+            val cancelFocus = remember { FocusRequester() }
+            LaunchedEffect(Unit) {
+                delay(100)
+                runCatching { cancelFocus.requestFocus() }
+            }
+            Text(
+                text = "Cancel",
+                color = Color(0xFFD0D0D0),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .focusRequester(cancelFocus)
+                    .tvFocusHighlight(RoundedCornerShape(50))
+                    .clip(RoundedCornerShape(50))
+                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(50))
+                    .clickable(onClick = onCancel)
+                    .padding(horizontal = 22.dp, vertical = 8.dp)
+            )
         }
     }
 }
