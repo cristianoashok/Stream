@@ -36,6 +36,7 @@ import com.victor.stream.ui.SearchScreen
 import com.victor.stream.ui.SettingsScreen
 import com.victor.stream.ui.RemoteKeyRouter
 import com.victor.stream.ui.TvFocusMemory
+import com.victor.stream.ui.BrandCollectionScreen
 import com.victor.stream.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -199,6 +200,9 @@ fun AppNavHost() {
                 anilistPlanningList = anilistPlanningList,
                 tmdbWatchlistMovies = tmdbWatchlistMovies,
                 tmdbWatchlistSeries = tmdbWatchlistSeries,
+                onOpenBrand = { key ->
+                    navController.navigate("brand/$key") { launchSingleTop = true }
+                },
                 onOpenSearchScreen = {
                     if (navController.currentDestination?.route != "search") {
                         navController.navigate("search") { launchSingleTop = true }
@@ -217,6 +221,17 @@ fun AppNavHost() {
                     }
                 },
                 focusMemory = homeFocusMemory
+            )
+        }
+
+        composable(
+            route = "brand/{key}",
+            arguments = listOf(navArgument("key") { type = NavType.StringType })
+        ) { backStackEntry ->
+            BrandCollectionScreen(
+                brandKey = backStackEntry.arguments?.getString("key") ?: "",
+                onBack = { navController.navigateBackSafely() },
+                onMediaClick = { item -> openDetailsForMedia(item) }
             )
         }
 

@@ -1323,6 +1323,7 @@ fun HomeScreenWithSidebar(
     onOpenSettingsScreen: () -> Unit,
     onMediaClick: (MediaItemModel) -> Unit,
     onContinueClick: (WatchProgressEntry) -> Unit,
+    onOpenBrand: (String) -> Unit = {},
     onOpenGenre: (String, String) -> Unit = { _, _ -> },
     focusMemory: TvFocusMemory = remember { TvFocusMemory() }
 ) {
@@ -1587,6 +1588,9 @@ fun HomeScreenWithSidebar(
                                                 rowKey = "home-top10"
                                             )
                                         }
+                                    }
+                                    item {
+                                        BrandRows(onOpenBrand = { brand -> onOpenBrand(brand.key) })
                                     }
                                     if (trendingAnime.isNotEmpty()) {
                                         item {
@@ -1892,24 +1896,28 @@ fun PhoneTopHeader(
                 )
             }
         }
+        // Tabs sit in a dark frosted capsule so they stay readable over any poster
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0x8C000000))
+                .border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(50))
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(4.dp)
         ) {
             listOf("Home" to "Home", "Movies" to "Movies", "Series" to "Series", "Anime" to "Anime")
                 .forEach { (key, label) ->
                     val selected = key == selectedSection
                     val pill by animateColorAsState(
-                        targetValue = if (selected) Color(0x38FFFFFF) else Color.Transparent,
+                        targetValue = if (selected) Color.White else Color.Transparent,
                         animationSpec = tween(220),
                         label = "tabPill"
                     )
                     val txt by animateColorAsState(
-                        targetValue = if (selected) Color.White else Color(0xFFA3A3A3),
+                        targetValue = if (selected) Color.Black else Color(0xFFE0E0E0),
                         animationSpec = tween(220),
                         label = "tabText"
                     )
@@ -1922,7 +1930,7 @@ fun PhoneTopHeader(
                             .clip(RoundedCornerShape(50))
                             .background(pill)
                             .clickable { onSelectSection(key) }
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 7.dp)
                     )
                 }
         }
@@ -3436,12 +3444,25 @@ fun SearchScreen(
         if (initialType != "All" || initialGenre != "All") performSearch()
     }
 
+    // Genre pill tapped -> its own browse page (year + rating filters on top)
+    var openGenreId by rememberSaveable { mutableStateOf<Int?>(null) }
+    val openGenre = openGenreId
+    if (openGenre != null) {
+        GenreBrowsePage(
+            genreId = openGenre,
+            genreName = GENRE_MAP[openGenre] ?: "Genre",
+            onBack = { openGenreId = null },
+            onMediaClick = onMediaClick
+        )
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(AppTheme.c.background)
             .statusBarsPadding()
-            .padding(16.dp),
+            .padding(start = 14.dp, end = 14.dp, top = 10.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(
@@ -3521,8 +3542,10 @@ fun SearchScreen(
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterDropdownPill(
                 label = "Type",
@@ -3533,8 +3556,7 @@ fun SearchScreen(
                 onSelect = {
                     selectedType = it
                     performSearch()
-                },
-                modifier = Modifier.weight(1f)
+                }
             )
             FilterDropdownPill(
                 label = "Genre",
@@ -3545,24 +3567,34 @@ fun SearchScreen(
                 onSelect = {
                     selectedGenre = it
                     performSearch()
-                },
-                modifier = Modifier.weight(1.3f)
+                }
             )
             FilterDropdownPill(
                 label = "Year",
                 selectedValue = selectedYear,
                 expanded = yearExpanded,
                 onExpandedChange = { yearExpanded = it },
-                options = listOf("All") + (2026 downTo 2005).map { it.toString() },
+                options = listOf("All") + (java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) downTo 1980).map { it.toString() },
                 onSelect = {
                     selectedYear = it
                     performSearch()
-                },
-                modifier = Modifier.weight(0.95f)
+                }
             )
+            if (selectedType != "All" || selectedGenre != "All" || selectedYear != "All") {
+                FilterChipPill(text = "Reset", selected = false, onClick = {
+                    selectedType = "All"
+                    selectedGenre = "All"
+                    selectedYear = "All"
+                    if (queryInput.isBlank()) {
+                        hasSearched = false
+                        searchResults = emptyList()
+                    } else {
+                        performSearch()
+                    }
+                })
+            }
         }
 
-        HorizontalDivider(color = AppTheme.c.glassBorder)
 
         if (isSearching) {
             LazyVerticalGrid(
@@ -3582,15 +3614,14 @@ fun SearchScreen(
                 }
             }
         } else if (!hasSearched) {
-            if (recentSearches.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Search TMDB & Anime or filter by Type, Genre & Year.",
-                        color = Color.Gray,
-                        fontSize = 14.sp
-                    )
-                }
-            } else {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 24.dp)
+            ) {
+                if (recentSearches.isNotEmpty()) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
@@ -3643,6 +3674,19 @@ fun SearchScreen(
                         }
                     }
                 }
+                }
+                Text(
+                    text = "Browse by genre",
+                    color = Color.White,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                GenrePillGrid(onGenreClick = { id, _ ->
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                    openGenreId = id
+                })
             }
         } else if (searchResults.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -3654,9 +3698,9 @@ fun SearchScreen(
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 110.dp),
-                contentPadding = PaddingValues(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                columns = GridCells.Adaptive(minSize = 105.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -3688,37 +3732,31 @@ fun FilterDropdownPill(
     modifier: Modifier = Modifier
 ) {
     val isActive = selectedValue != "All"
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(text = label, color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+    Column(modifier = modifier) {
         Box {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp)
-                    .tvFocusHighlight(RoundedCornerShape(10.dp), focusedScale = 1.03f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isActive) Color(0xFF2C1A1A) else AppTheme.c.surfaceHigh)
-                    .border(1.dp, if (isActive) AppTheme.c.accent else AppTheme.c.glassBorder, RoundedCornerShape(10.dp))
+                    .height(38.dp)
+                    .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.04f)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isActive) Color.White else Color(0xFF1A1A1A))
+                    .border(1.dp, if (isActive) Color.Transparent else Color(0x1FFFFFFF), RoundedCornerShape(50))
                     .clickable { onExpandedChange(true) }
-                    .padding(horizontal = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = selectedValue,
-                    color = Color.White,
+                    text = if (isActive) selectedValue else label,
+                    color = if (isActive) Color.Black else Color.White,
                     fontSize = 13.sp,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    softWrap = false
                 )
                 Text(
-                    text = "▾",
-                    color = if (isActive) AppTheme.c.accent else Color.Gray,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(start = 4.dp)
+                    text = "  \u25BE",
+                    color = if (isActive) Color.Black else Color(0xFF9A9A9A),
+                    fontSize = 12.sp
                 )
             }
 
