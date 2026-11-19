@@ -4,6 +4,10 @@
 
     <!-- Allows the app to fetch TMDB data and stream videos -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Casting: find TVs on Wi-Fi and let the TV pull video through the phone relay -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <!-- Tells Android TV that this app works without a touchscreen -->
     <uses-feature
@@ -23,6 +27,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Stream"
         tools:targetApi="31">
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.victor.stream.cast.CastOptionsProvider" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -18,6 +18,10 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.victor.stream.cast.CastController
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -194,6 +198,7 @@ fun PlayerScreen(
             statusToastLabel = null
         }
     }
+
 
     DisposableEffect(activity) {
         val prevOrientation = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -402,7 +407,54 @@ fun PlayerScreen(
 
     val playerState by playbackController.state.collectAsState()
 
-    KeepScreenAwake(enabled = isTv || playerState.isPlaying || playerState.isBuffering || isResolvingOverlay)
+    // ---- Casting (Chromecast / Google TV through the phone relay) ----
+    val castAvailable = remember(context) { !isTv && CastController.isAvailable(context) }
+    var showCastPicker by remember { mutableStateOf(false) }
+    val castState = CastController.state
+    val isCasting = castState !is CastController.State.Idle
+    // Android 17+: talking to devices on the Wi-Fi needs the "local network" permission
+    val localNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
+    val localNetworkLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) showCastPicker = true
+        else statusToastLabel = "Allow local network access to cast"
+    }
+    val openCastPicker: () -> Unit = {
+        if (android.os.Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(context, localNetworkPermission) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            localNetworkLauncher.launch(localNetworkPermission)
+        } else {
+            showCastPicker = true
+        }
+    }
+    // Once connected, hand the current video (and position) to the TV and pause the phone
+    LaunchedEffect(castState, activeSession.id) {
+        if (castState is CastController.State.Connected && CastController.loadedSessionId != activeSession.id) {
+            val player = playbackController.exoPlayer
+            val pos = player.currentPosition.coerceAtLeast(0L)
+            player.pause()
+            if (!CastController.load(activeSession, pos)) {
+                statusToastLabel = CastController.lastError ?: "Couldn't cast this video"
+                CastController.stop()
+            }
+        }
+    }
+    // Keep the phone silent while the TV plays
+    LaunchedEffect(isCasting) {
+        while (isCasting) {
+            if (playbackController.exoPlayer.isPlaying) playbackController.exoPlayer.pause()
+            delay(1000L)
+        }
+    }
+    // Leaving the player ends casting (the relay lives with this screen)
+    DisposableEffect(Unit) {
+        onDispose {
+            if (CastController.state !is CastController.State.Idle) CastController.stop()
+        }
+    }
+
+    // Stay awake while casting too: the phone relays the video to the TV
+    KeepScreenAwake(enabled = isTv || isCasting || playerState.isPlaying || playerState.isBuffering || isResolvingOverlay)
 
     // Prepare initial stream and load metadata subtitles + skip segments
     LaunchedEffect(activeSession.id, activeSession.stream.streamUrl) {
@@ -872,6 +924,19 @@ fun PlayerScreen(
             }
         }
 
+        if (castAvailable) {
+            AnimatedVisibility(
+                visible = controllerVisible && !showRightSettingsSheet && !isCasting,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+            ) {
+                CastButton(connected = isCasting, onClick = openCastPicker)
+            }
+        }
+
         AnimatedVisibility(
             visible = playerState.activeSkipSegment != null && !isResolvingOverlay && !showRightSettingsSheet,
             enter = fadeIn(),
@@ -1305,6 +1370,22 @@ fun PlayerScreen(
                     .background(Color(0xCC000000), RoundedCornerShape(8.dp))
                     .padding(horizontal = 14.dp, vertical = 6.dp)
             )
+        }
+
+        if (isCasting) {
+            CastingOverlay(
+                media = media,
+                episode = activeEpisode,
+                onStopCasting = {
+                    // Carry on playing on the phone from where the TV was
+                    val pos = CastController.stop()
+                    playbackController.exoPlayer.seekTo(pos)
+                    playbackController.exoPlayer.play()
+                }
+            )
+        }
+        if (showCastPicker) {
+            CastDevicePickerDialog(onDismiss = { showCastPicker = false })
         }
     }
 }

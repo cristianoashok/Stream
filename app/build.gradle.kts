@@ -69,6 +69,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.3.1")
     implementation("androidx.media3:media3-ui:1.3.1")
 
+    // Google Cast (Chromecast / Google TV) for the player's cast button
+    implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
+
     // Coil for loading TMDB poster images
     implementation("io.coil-kt:coil-compose:2.6.0")
 
