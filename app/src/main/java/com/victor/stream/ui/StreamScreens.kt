@@ -825,9 +825,11 @@ fun HeroCarousel(
 }
 
 /**
- * TV hero: one page at a time, LEFT/RIGHT on the Details button changes the
- * featured title with a crossfade. The button itself never moves, so remote
- * focus is stable and pages can never stop half-way.
+ * TV hero, same design as the phone: big backdrop, title block bottom-left with
+ * "year · type · rating", short overview and Play / My List / Info pills.
+ * Remote: LEFT on Play goes to the previous title (or the menu on the first),
+ * RIGHT on Info goes to the next title. It also moves on by itself every few
+ * seconds while you're browsing the rows below.
  */
 @Composable
 private fun TvHeroPager(
@@ -836,6 +838,7 @@ private fun TvHeroPager(
     focusMemory: TvFocusMemory?
 ) {
     val t = AppTheme.c
+    val scope = rememberCoroutineScope()
     var idx by rememberSaveable { mutableIntStateOf(0) }
     var heroDir by remember { mutableIntStateOf(1) }
     if (idx >= items.size) idx = 0
@@ -843,9 +846,13 @@ private fun TvHeroPager(
     val heroResume = remember(current.id) {
         ServiceLocator.prefsStore.getContinueWatching().firstOrNull { it.media.id == current.id }
     }
+    var inList by remember(current.id) {
+        mutableStateOf(ServiceLocator.prefsStore.getWatchLater().any { it.id == current.id })
+    }
+    var heroFocused by remember { mutableStateOf(false) }
+    val heroHeight = (LocalConfiguration.current.screenHeightDp * 0.70f).dp.coerceAtLeast(320.dp)
 
-    // The Details button is one static composable (so remote focus never
-    // breaks), but it visually rides along with each page change.
+    // The buttons stay the same focusable views (focus never breaks) but ride along with each page
     val buttonSlide = remember { Animatable(0f) }
     var firstHeroShow by remember { mutableStateOf(true) }
     LaunchedEffect(idx) {
@@ -856,12 +863,31 @@ private fun TvHeroPager(
             buttonSlide.animateTo(0f, animationSpec = tween(420))
         }
     }
+    // Auto-advance while the viewer is somewhere else on the page
+    LaunchedEffect(items.size, heroFocused) {
+        if (heroFocused || items.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(9000L)
+            heroDir = 1
+            idx = (idx + 1) % items.size
+        }
+    }
+    fun goNext() {
+        heroDir = 1
+        idx = (idx + 1) % items.size
+    }
+    fun goPrev(): Boolean {
+        if (idx == 0) return false
+        heroDir = -1
+        idx -= 1
+        return true
+    }
 
-    Box(modifier = Modifier
-        .fillMaxWidth()
-        .height(340.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(heroHeight)
     ) {
-        // Backdrop + text slide in the direction you pressed; the button stays put.
         AnimatedContent(
             targetState = idx,
             transitionSpec = {
@@ -869,7 +895,7 @@ private fun TvHeroPager(
                 (slideInHorizontally(animationSpec = tween(420)) { full -> full / 2 * d } + fadeIn(tween(420))) togetherWith
                     (slideOutHorizontally(animationSpec = tween(380)) { full -> -full / 2 * d } + fadeOut(tween(260)))
             },
-            label = "heroPage"
+            label = "tvHeroPage"
         ) { i ->
             val media = items[i.coerceIn(0, items.size - 1)]
             Box(modifier = Modifier.fillMaxSize()) {
@@ -883,100 +909,163 @@ private fun TvHeroPager(
                 )
                 HeroScrims()
                 Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(start = 18.dp, top = 26.dp, end = 18.dp)
-                        .fillMaxWidth(0.72f)
-                        .height(140.dp),
-                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                        .align(Alignment.BottomStart)
+                        .padding(start = 28.dp, end = 28.dp, bottom = 86.dp)
+                        .fillMaxWidth(0.55f)
                 ) {
                     HeroKicker(media)
                     Text(
                         text = media.title,
                         color = Color.White,
-                        fontSize = 34.sp,
-                        lineHeight = 38.sp,
+                        fontSize = 38.sp,
+                        lineHeight = 42.sp,
                         fontWeight = FontWeight.Black,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    HeroMetaRow(media)
-                }
-            }
-        }
-
-        // Static Details button — LEFT/RIGHT flips the featured title.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(start = 18.dp, top = 186.dp)
-                .graphicsLayer {
-                    // Slide only — animating alpha here would clip the focus ring's corners
-                    translationX = buttonSlide.value
-                }
-                .then(
-                    if (focusMemory != null) Modifier.tvRememberedFocus("hero", 0, true, focusMemory)
-                    else Modifier
-                )
-                .onPreviewKeyEvent { ev ->
-                    if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when (ev.key) {
-                        Key.DirectionRight -> {
-                            heroDir = 1
-                            idx = (idx + 1) % items.size
-                            true
-                        }
-                        Key.DirectionLeft -> {
-                            if (idx > 0) {
-                                heroDir = -1
-                                idx -= 1
-                                true
-                            } else {
-                                false // at the first page, LEFT goes to the side rail
-                            }
-                        }
-                        else -> false
+                    val kind = when {
+                        media.isAnime -> "Anime"
+                        media.isSeries -> "Series"
+                        else -> "Movie"
+                    }
+                    Text(
+                        text = listOf(media.releaseYear.take(4), kind, "\u2605 " + String.format("%.1f", media.rating))
+                            .filter { it.isNotBlank() }
+                            .joinToString("   \u2022   "),
+                        color = Color(0xE6FFFFFF),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (media.overview.isNotBlank()) {
+                        Text(
+                            text = media.overview,
+                            color = Color(0xFFCFCFCF),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
-                .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
-                .clip(RoundedCornerShape(50))
-                .background(t.accentGradient)
-                .clickable {
-                    if (focusMemory != null) focusMemory.pendingKey = "hero"
-                    onPlay(current)
-                }
-                .padding(horizontal = 22.dp, vertical = 9.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = null,
-                tint = t.onAccent,
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                text = if (heroResume != null) "Resume" else "Details",
-                color = t.onAccent,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
-            val minsLeft = if (heroResume != null && heroResume.durationMs > 0L) {
-                ((heroResume.durationMs - heroResume.positionMs).coerceAtLeast(0L) / 60000L).toInt()
-            } else -1
-            if (minsLeft > 0) {
-                Text(
-                    text = "· $minsLeft min left",
-                    color = t.onAccent.copy(alpha = 0.8f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
             }
         }
 
-        HeroDots(count = items.size, current = idx, modifier = Modifier.align(Alignment.BottomEnd))
+        // Play / My List / Info - one static row of focusable pills
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 28.dp, bottom = 26.dp)
+                .graphicsLayer { translationX = buttonSlide.value }
+                .onFocusChanged { heroFocused = it.hasFocus }
+        ) {
+            // Play (or Resume): LEFT here = previous title
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .then(
+                        if (focusMemory != null) Modifier.tvRememberedFocus("hero", 0, true, focusMemory)
+                        else Modifier
+                    )
+                    .onPreviewKeyEvent { ev ->
+                        ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft && goPrev()
+                    }
+                    .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White)
+                    .clickable {
+                        if (focusMemory != null) focusMemory.pendingKey = "hero"
+                        onPlay(current)
+                    }
+                    .padding(horizontal = 30.dp, vertical = 10.dp)
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
+                Text(
+                    text = if (heroResume != null) "Resume" else "Play",
+                    color = Color.Black,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            // My List
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x40FFFFFF))
+                    .clickable {
+                        if (inList) {
+                            ServiceLocator.prefsStore.removeFromWatchLater(current.id)
+                            scope.launch { ServiceLocator.catalogRepository.syncProgressToCloud(current, inWatchlist = false) }
+                        } else {
+                            ServiceLocator.prefsStore.addToWatchLater(current)
+                            scope.launch { ServiceLocator.catalogRepository.syncProgressToCloud(current, inWatchlist = true) }
+                        }
+                        inList = !inList
+                    }
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            ) {
+                Icon(
+                    imageVector = if (inList) Icons.Filled.Check else Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text("My List", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+            // Info: RIGHT here = next title
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .onPreviewKeyEvent { ev ->
+                        if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionRight) {
+                            goNext()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.08f)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x40FFFFFF))
+                    .clickable { onPlay(current) }
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            ) {
+                Icon(Icons.Outlined.Info, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Text("Info", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        // Small white page dots, bottom-right
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 28.dp, bottom = 38.dp)
+        ) {
+            repeat(items.size) { index ->
+                val w by animateDpAsState(
+                    targetValue = if (index == idx) 16.dp else 5.dp,
+                    animationSpec = tween(300),
+                    label = "tvDot"
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 3.dp)
+                        .height(5.dp)
+                        .width(w)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (index == idx) Color.White else Color(0x73FFFFFF))
+                )
+            }
+        }
     }
 }
 
@@ -1452,12 +1541,8 @@ fun HomeScreenWithSidebar(
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
             if (isTv) {
-                SideRail(
-                    selectedSection = selectedSection,
-                    onSelectSection = goSection,
-                    onOpenSearch = goSearch,
-                    onOpenSettings = goSettings
-                )
+                // Room for the collapsed rail; the rail itself is drawn on top (below)
+                Spacer(modifier = Modifier.width(RAIL_COLLAPSED_WIDTH))
             }
                 Box(
                     modifier = Modifier
@@ -1903,6 +1988,16 @@ fun HomeScreenWithSidebar(
                 }
         }
 
+        if (isTv) {
+            // Floats over the page so opening it doesn't squash the rows
+            SideRail(
+                selectedSection = selectedSection,
+                onSelectSection = goSection,
+                onOpenSearch = goSearch,
+                onOpenSettings = goSettings,
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+        }
         if (!isTv) {
             val onMyList = selectedSection == "WatchLater"
             PhoneTopHeader(
@@ -2102,49 +2197,72 @@ private fun BottomNavItem(
 }
 
 // ==========================================
-// SIDE RAIL — compact, icon-only, always visible
+// SIDE RAIL (TV) — compact icons that open into a labelled menu when focused
 // ==========================================
+
+val RAIL_COLLAPSED_WIDTH = 64.dp
 
 @Composable
 fun SideRail(
     selectedSection: String,
     onSelectSection: (String) -> Unit,
     onOpenSearch: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val t = AppTheme.c
+    var expanded by remember { mutableStateOf(false) }
+    val width by animateDpAsState(
+        targetValue = if (expanded) 220.dp else RAIL_COLLAPSED_WIDTH,
+        animationSpec = tween(220),
+        label = "railWidth"
+    )
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxHeight()
-            .width(56.dp)
-            .background(t.background)
+            .width(width)
+            .onFocusChanged { expanded = it.hasFocus }
+            .background(if (expanded) Color(0xF5000000) else t.background)
             .statusBarsPadding()
-            .padding(vertical = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 10.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        RailItem(
-            icon = Icons.Outlined.Search,
-            label = "Search",
-            selected = false,
-            onClick = onOpenSearch
-        )
+        // Wordmark: red bar, plus "Stream" when open
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .height(40.dp)
+                .padding(start = 12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 8.dp, height = 22.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(t.accentGradient)
+            )
+            AnimatedVisibility(visible = expanded, enter = fadeIn(tween(180)), exit = fadeOut(tween(120))) {
+                Text(
+                    text = "Stream",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(8.dp))
 
-        RailItem(Icons.Outlined.Home, "Home", selectedSection == "Home") { onSelectSection("Home") }
-        RailItem(Icons.Outlined.Movie, "Movies", selectedSection == "Movies") { onSelectSection("Movies") }
-        RailItem(Icons.Outlined.Tv, "TV Series", selectedSection == "Series") { onSelectSection("Series") }
-        RailItem(ToriiIcon, "Anime", selectedSection == "Anime") { onSelectSection("Anime") }
-        RailItem(Icons.Outlined.BookmarkBorder, "Watch Later", selectedSection == "WatchLater") { onSelectSection("WatchLater") }
+        RailItem(Icons.Outlined.Search, "Search", false, expanded, onOpenSearch)
+        Spacer(modifier = Modifier.height(4.dp))
+        RailItem(Icons.Outlined.Home, "Home", selectedSection == "Home", expanded) { onSelectSection("Home") }
+        RailItem(Icons.Outlined.Movie, "Movies", selectedSection == "Movies", expanded) { onSelectSection("Movies") }
+        RailItem(Icons.Outlined.Tv, "Series", selectedSection == "Series", expanded) { onSelectSection("Series") }
+        RailItem(ToriiIcon, "Anime", selectedSection == "Anime", expanded) { onSelectSection("Anime") }
+        RailItem(Icons.Outlined.BookmarkBorder, "My List", selectedSection == "WatchLater", expanded) { onSelectSection("WatchLater") }
 
         Spacer(modifier = Modifier.weight(1f))
 
-        RailItem(
-            icon = Icons.Outlined.Settings,
-            label = "Settings",
-            selected = false,
-            onClick = onOpenSettings
-        )
+        RailItem(Icons.Outlined.Settings, "Settings", false, expanded, onOpenSettings)
     }
 }
 
@@ -2153,37 +2271,50 @@ private fun RailItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     selected: Boolean,
+    expanded: Boolean,
     onClick: () -> Unit
 ) {
-    val t = AppTheme.c
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    // Same language as the phone tabs: selected = white pill when open, soft pill when closed
+    val bg by animateColorAsState(
+        targetValue = when {
+            selected && expanded -> Color.White
+            selected -> Color(0x2EFFFFFF)
+            else -> Color.Transparent
+        },
+        animationSpec = tween(200),
+        label = "railBg"
+    )
+    val fg by animateColorAsState(
+        targetValue = when {
+            selected && expanded -> Color.Black
+            selected -> Color.White
+            else -> Color(0xFF9A9A9A)
+        },
+        animationSpec = tween(200),
+        label = "railFg"
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .tvFocusHighlight(RoundedCornerShape(10.dp), focusedScale = 1.15f)
-            .clip(RoundedCornerShape(10.dp))
+            .fillMaxWidth()
+            .height(44.dp)
+            .tvFocusHighlight(RoundedCornerShape(50), focusedScale = 1.05f)
+            .clip(RoundedCornerShape(50))
+            .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp)
+            .padding(start = 11.dp, end = 12.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (selected) Color.White else Color(0xFF8C8C8C),
-            modifier = Modifier.size(22.dp)
-        )
-        // The reference design's little accent underline under the active icon
-        val w by animateDpAsState(
-            targetValue = if (selected) 18.dp else 0.dp,
-            animationSpec = tween(250),
-            label = "railUnderline"
-        )
-        Box(
-            modifier = Modifier
-                .padding(top = 3.dp)
-                .height(2.dp)
-                .width(w)
-                .clip(RoundedCornerShape(50))
-                .background(t.accent)
-        )
+        Icon(imageVector = icon, contentDescription = label, tint = fg, modifier = Modifier.size(22.dp))
+        AnimatedVisibility(visible = expanded, enter = fadeIn(tween(180)), exit = fadeOut(tween(100))) {
+            Text(
+                text = label,
+                color = if (selected) fg else Color(0xFFE6E6E6),
+                fontSize = 15.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 14.dp)
+            )
+        }
     }
 }
 
@@ -2552,7 +2683,7 @@ fun MediaDetailsScreen(
                 modifier = Modifier
                     .horizontalBleed(16.dp)
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .height(if (isTv) 340.dp else 260.dp)
             ) {
                 AsyncImage(
                     model = media.backdropUrl.ifBlank { media.posterUrl },
@@ -2719,7 +2850,7 @@ fun MediaDetailsScreen(
                     maxLines = if (overviewExpanded) Int.MAX_VALUE else 4,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxWidth(if (isTv) 0.65f else 1f)
                         .animateContentSize(tween(220))
                         .clickable { overviewExpanded = !overviewExpanded }
                 )
@@ -3066,7 +3197,8 @@ fun MediaDetailsScreen(
                 HorizontalDivider(color = Color(0x1FFFFFFF))
                 Text("More like this", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    moreLikeThis.take(12).chunked(2).forEach { pair ->
+                    val moreCols = if (isTv) 4 else 2
+                    moreLikeThis.take(12).chunked(moreCols).forEach { pair ->
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             pair.forEach { rec ->
                                 Column(
@@ -3096,7 +3228,7 @@ fun MediaDetailsScreen(
                                     )
                                 }
                             }
-                            if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
+                            repeat(moreCols - pair.size) { Spacer(modifier = Modifier.weight(1f)) }
                         }
                     }
                 }
@@ -3153,6 +3285,7 @@ fun DetailsWideButton(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
+            .then(if (rememberIsTv()) Modifier.widthIn(max = 380.dp) else Modifier)
             .fillMaxWidth()
             .tvFocusHighlight(RoundedCornerShape(10.dp), focusedScale = 1.03f)
             .clip(RoundedCornerShape(10.dp))

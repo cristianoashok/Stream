@@ -228,8 +228,9 @@ val BROWSE_GENRES: List<Pair<Int, String>> = listOf(
 @Composable
 fun GenrePillGrid(onGenreClick: (Int, String) -> Unit) {
     val t = AppTheme.c
+    val cols = if (rememberIsTv()) 4 else 2
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        BROWSE_GENRES.chunked(2).forEach { pair ->
+        BROWSE_GENRES.chunked(cols).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { (id, name) ->
                     Row(
@@ -269,7 +270,7 @@ fun GenrePillGrid(onGenreClick: (Int, String) -> Unit) {
                         )
                     }
                 }
-                if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
+                repeat(cols - pair.size) { Spacer(modifier = Modifier.weight(1f)) }
             }
         }
     }
